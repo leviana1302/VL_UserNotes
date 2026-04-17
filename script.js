@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      2.3
+// @version      2.3.1
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -1179,21 +1179,11 @@
             #cc-snippet-btns button:hover {
                 background: #e0e0e0;
             }
-            #cc-snippet-btns button:nth-child(2),
-            #cc-snippet-btns button:nth-child(5),
-            #cc-snippet-btns button:nth-child(6) {
-                font-size: 22px;
-            }
             @media (max-width: 768px) {
                 #cc-snippet-btns button {
                     padding: 12px 14px;
                     font-size: 20px;
                     flex: 0 1 calc(12.5% - 5px);
-                }
-                #cc-snippet-btns button:nth-child(2),
-                #cc-snippet-btns button:nth-child(5),
-                #cc-snippet-btns button:nth-child(6) {
-                    font-size: 24px;
                 }
             }
             .vl-shortcut-badge {
@@ -1466,6 +1456,11 @@
             b.addEventListener("click", async () => {
                 await applySnippet(sn);
             });
+
+            // Vergrößere kleinere Emojis (✳️, ✉️, ⚠️)
+            if (sn.emoji === "✳️" || sn.emoji === "✉️" || sn.emoji === "⚠️") {
+                b.style.fontSize = "22px";
+            }
 
             btnBar.appendChild(b);
         });

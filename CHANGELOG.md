@@ -1,5 +1,9 @@
 # Changelog
 
+## [2.3.1] - 2026-04-17
+### Changed
+- Fix Emoji-Größen
+
 ## [2.3] - 2026-04-17
 ### Changed
 - Snippet-Buttons nur mobil vergrößert & in 2 Zeilen
