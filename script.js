@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      2.3.10
+// @version      2.4
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -1038,13 +1038,13 @@
         if (!ta) return;
 
         let lines = ta.value.split("\n");
-
+        
         // Wenn "GEOCHECKER FALSCH", alte CC-Zeile am Anfang entfernen
         if (snippet.includes("GEOCHECKER FALSCH") && isCCLine(lines[0])) {
             console.debug("[VL] handleSolutionCheckerResult: entferne alte CC-Zeile");
             lines.shift();
         }
-
+        
         lines = beautifyLines(lines);
 
         let i = 0;
@@ -1057,12 +1057,12 @@
 
         scrollToNote();
         writeLines(lines, true);
-
+        
         // Warten bis writeLines fertig ist (noteWriteLocked wird auf false gesetzt)
         await new Promise(r => setTimeout(r, 400));
-
+        
         updateCCLine();
-
+        
         // Zeige Reset-Coords-Prompt wenn "GEOCHECKER FALSCH" und korrigierte Coords vorhanden
         console.log("[VL] handleSolutionCheckerResult Debug:", {
             snippetContent: snippet.substring(0, 50),
@@ -1070,7 +1070,7 @@
             cachedCoords,
             shouldShow: snippet.includes("GEOCHECKER FALSCH") && cachedCoords
         });
-
+        
         if (snippet.includes("GEOCHECKER FALSCH") && cachedCoords) {
             console.log("[VL] handleSolutionCheckerResult: zeige Reset-Coords-Prompt");
             showResetCoordsPrompt();
@@ -1243,9 +1243,9 @@
         // Nur auf Android aktivieren
         const ua = navigator.userAgent;
         const isAndroid = /Android/.test(ua);
-
+        
         console.log("[VL] initMobileViewport: isAndroid =", isAndroid);
-
+        
         if (!isAndroid) {
             return;
         }
@@ -1272,7 +1272,7 @@
             const noteSectionWidth = noteSection.offsetWidth;
             const viewportWidth = window.innerWidth;
             let zoomFactor = viewportWidth / noteSectionWidth;
-
+            
             // 3% weniger Zoom für perfektes Gleichgewicht
             zoomFactor = zoomFactor * 0.97;
 
@@ -1281,7 +1281,7 @@
             // Wende Zoom an (wie Finger-Zoom)
             document.body.style.zoom = zoomFactor;
             document.documentElement.style.zoom = zoomFactor;
-
+            
             // Scrolle nach oben-links
             window.scrollTo(0, 0);
 
@@ -1445,7 +1445,7 @@
 
             // Text-Labels (nur reine Buchstaben wie WP, ST)
             const isTextLabel = /^[A-Za-z]+$/.test(sn.emoji);
-
+            
             if (isTextLabel) {
                 emojiContainer.style.fontSize = "11px";
             } else {
@@ -1459,7 +1459,7 @@
                     emojiContainer.style.fontSize = "20px";
                 }
             }
-
+            
             b.appendChild(emojiContainer);
 
             // Badge mit Shortcut-Ziffer (unten rechts)
