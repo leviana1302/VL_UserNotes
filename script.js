@@ -1,11 +1,13 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      2.0
+// @version      2.1
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
 // @match        https://www.geocaching.com/seek/cache_details.aspx*
+// @updateURL    https://github.com/leviana1302/VL_UserNotes/raw/main/script.js
+// @downloadURL  https://github.com/leviana1302/VL_UserNotes/raw/main/script.js
 // @grant        none
 // ==/UserScript==
 
