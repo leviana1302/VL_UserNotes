@@ -1,14 +1,14 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      2.1
+// @version      2.2
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
 // @match        https://www.geocaching.com/seek/cache_details.aspx*
+// @grant        none
 // @updateURL    https://github.com/leviana1302/VL_UserNotes/raw/main/script.js
 // @downloadURL  https://github.com/leviana1302/VL_UserNotes/raw/main/script.js
-// @grant        none
 // ==/UserScript==
 
 (function () {
@@ -1154,20 +1154,22 @@
             #cc-snippet-btns {
                 display: flex;
                 flex-wrap: wrap;
-                gap: 3px;
-                margin-top: 5px;
-                margin-bottom: 6px;
+                gap: 6px;
+                margin-top: 8px;
+                margin-bottom: 10px;
             }
             #cc-snippet-btns button {
                 position: relative;
-                padding: 2px 5px;
-                min-width: 28px;
+                flex: 1 1 calc(50% - 6px);
+                padding: 8px 12px;
                 border: 1px solid #ccc;
                 border-radius: 4px;
                 background: #f5f5f5;
                 cursor: pointer;
-                font-size: 16px;
+                font-size: 18px;
                 line-height: 1.3;
+                font-weight: 500;
+                min-width: 50px;
             }
             #cc-snippet-btns button:hover {
                 background: #e0e0e0;
