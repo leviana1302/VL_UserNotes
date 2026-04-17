@@ -1,5 +1,9 @@
 # Changelog
 
+## [2.5] - 2026-04-17
+### Fixed
+- Fix Scale für iOS Safari
+
 ## [2.4] - 2026-04-17
 ### Fixed
 - Fix Scale für Emoji-Größen

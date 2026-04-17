@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      2.4
+// @version      2.5
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -1433,6 +1433,14 @@
             const b = document.createElement("button");
             b.type = "button";
 
+            // Device-spezifischer Scale-Faktor für problematische Emojis
+            const ua = navigator.userAgent;
+            const isSafari = ua.includes('Safari') && !ua.includes('Chrome');
+            const isIPad = ua.includes('iPad') || (ua.includes('Mac OS X') && navigator.maxTouchPoints >= 5);
+            const isIPadSafari = isSafari && isIPad;
+            
+            const smallEmojisScaleFactor = isIPadSafari ? 1.1 : 1.25;
+
             // Native Emojis als Text mit fester Höhe
             const emojiContainer = document.createElement("span");
             emojiContainer.style.display = "inline-flex";
@@ -1450,11 +1458,11 @@
                 emojiContainer.style.fontSize = "11px";
             } else {
                 // Manche Emojis (text-style) werden vom Browser kleiner gerendert.
-                // Vergrößere sie per transform: scale()
+                // Vergrößere sie per transform: scale() - device-spezifisch
                 const smallEmojis = ["✳️", "✉️", "⚠️"];
                 if (smallEmojis.includes(sn.emoji)) {
                     emojiContainer.style.fontSize = "16px";
-                    emojiContainer.style.transform = "scale(1.3)";
+                    emojiContainer.style.transform = `scale(${smallEmojisScaleFactor})`;
                 } else {
                     emojiContainer.style.fontSize = "20px";
                 }
