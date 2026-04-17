@@ -1168,8 +1168,13 @@
                 background: #f5f5f5;
                 cursor: pointer;
                 font-size: 18px;
-                line-height: 1.3;
+                line-height: 1;
                 font-weight: 500;
+                text-align: center;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                min-height: 36px;
             }
             #cc-snippet-btns button:hover {
                 background: #e0e0e0;
@@ -1179,15 +1184,6 @@
                     padding: 12px 14px;
                     font-size: 20px;
                     flex: 0 1 calc(12.5% - 5px);
-                }
-            }
-            @media (min-width: 769px) {
-                #cc-snippet-btns {
-                    flex-wrap: nowrap;
-                    overflow-x: auto;
-                }
-                #cc-snippet-btns button {
-                    flex: 0 0 auto;
                 }
             }
             .vl-shortcut-badge {
