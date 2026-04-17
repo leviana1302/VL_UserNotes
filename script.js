@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      2.3.1
+// @version      2.3
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -1038,13 +1038,13 @@
         if (!ta) return;
 
         let lines = ta.value.split("\n");
-        
+
         // Wenn "GEOCHECKER FALSCH", alte CC-Zeile am Anfang entfernen
         if (snippet.includes("GEOCHECKER FALSCH") && isCCLine(lines[0])) {
             console.debug("[VL] handleSolutionCheckerResult: entferne alte CC-Zeile");
             lines.shift();
         }
-        
+
         lines = beautifyLines(lines);
 
         let i = 0;
@@ -1057,12 +1057,12 @@
 
         scrollToNote();
         writeLines(lines, true);
-        
+
         // Warten bis writeLines fertig ist (noteWriteLocked wird auf false gesetzt)
         await new Promise(r => setTimeout(r, 400));
-        
+
         updateCCLine();
-        
+
         // Zeige Reset-Coords-Prompt wenn "GEOCHECKER FALSCH" und korrigierte Coords vorhanden
         console.log("[VL] handleSolutionCheckerResult Debug:", {
             snippetContent: snippet.substring(0, 50),
@@ -1070,7 +1070,7 @@
             cachedCoords,
             shouldShow: snippet.includes("GEOCHECKER FALSCH") && cachedCoords
         });
-        
+
         if (snippet.includes("GEOCHECKER FALSCH") && cachedCoords) {
             console.log("[VL] handleSolutionCheckerResult: zeige Reset-Coords-Prompt");
             showResetCoordsPrompt();
@@ -1167,7 +1167,7 @@
                 border-radius: 4px;
                 background: #f5f5f5;
                 cursor: pointer;
-                font-size: 18px;
+                font-size: 16px;
                 line-height: 1;
                 font-weight: 500;
                 text-align: center;
@@ -1182,7 +1182,7 @@
             @media (max-width: 768px) {
                 #cc-snippet-btns button {
                     padding: 12px 14px;
-                    font-size: 20px;
+                    font-size: 18px;
                     flex: 0 1 calc(12.5% - 5px);
                 }
             }
@@ -1243,9 +1243,9 @@
         // Nur auf Android aktivieren
         const ua = navigator.userAgent;
         const isAndroid = /Android/.test(ua);
-        
+
         console.log("[VL] initMobileViewport: isAndroid =", isAndroid);
-        
+
         if (!isAndroid) {
             return;
         }
@@ -1272,7 +1272,7 @@
             const noteSectionWidth = noteSection.offsetWidth;
             const viewportWidth = window.innerWidth;
             let zoomFactor = viewportWidth / noteSectionWidth;
-            
+
             // 3% weniger Zoom für perfektes Gleichgewicht
             zoomFactor = zoomFactor * 0.97;
 
@@ -1281,7 +1281,7 @@
             // Wende Zoom an (wie Finger-Zoom)
             document.body.style.zoom = zoomFactor;
             document.documentElement.style.zoom = zoomFactor;
-            
+
             // Scrolle nach oben-links
             window.scrollTo(0, 0);
 
@@ -1433,13 +1433,34 @@
             const b = document.createElement("button");
             b.type = "button";
 
-            // Emoji-Text (oder Textlabel für WP/ST)
-            const emojiSpan = document.createElement("span");
-            emojiSpan.textContent = sn.emoji;
-            if (sn.emoji.length <= 2 && !/\p{Emoji_Presentation}/u.test(sn.emoji)) {
-                emojiSpan.style.fontSize = "11px";
+            // Native Emojis als Text mit fester Höhe
+            const emojiContainer = document.createElement("span");
+            emojiContainer.style.display = "inline-flex";
+            emojiContainer.style.alignItems = "center";
+            emojiContainer.style.justifyContent = "center";
+            emojiContainer.style.height = "20px";
+            emojiContainer.style.width = "20px";
+            emojiContainer.style.lineHeight = "1";
+            emojiContainer.textContent = sn.emoji;
+
+            // Text-Labels (nur reine Buchstaben wie WP, ST)
+            const isTextLabel = /^[A-Za-z]+$/.test(sn.emoji);
+
+            if (isTextLabel) {
+                emojiContainer.style.fontSize = "11px";
+            } else {
+                // Manche Emojis (text-style) werden vom Browser kleiner gerendert.
+                // Vergrößere sie per transform: scale()
+                const smallEmojis = ["✳️", "✉️", "⚠️"];
+                if (smallEmojis.includes(sn.emoji)) {
+                    emojiContainer.style.fontSize = "16px";
+                    emojiContainer.style.transform = "scale(1.3)";
+                } else {
+                    emojiContainer.style.fontSize = "20px";
+                }
             }
-            b.appendChild(emojiSpan);
+
+            b.appendChild(emojiContainer);
 
             // Badge mit Shortcut-Ziffer (unten rechts)
             if (sn.shortcutKey) {
@@ -1456,11 +1477,6 @@
             b.addEventListener("click", async () => {
                 await applySnippet(sn);
             });
-
-            // Vergrößere kleinere Emojis (✳️, ✉️, ⚠️)
-            if (sn.emoji === "✳️" || sn.emoji === "✉️" || sn.emoji === "⚠️") {
-                b.style.fontSize = "22px";
-            }
 
             btnBar.appendChild(b);
         });
