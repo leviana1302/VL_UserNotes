@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      2.0
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -182,13 +182,13 @@
             return;
         }
 
-        // mehrere Leerzeilen reduzieren
+        // genau eine Leerzeile vor Emoji-Zeilen sicherstellen (ZUERST!)
+        lines = normalizeEmojiSpacing(lines);
+
+        // mehrere Leerzeilen reduzieren (danach)
         lines = lines.filter((line, idx, arr) =>
             line.trim() !== "" || idx === 0 || arr[idx - 1].trim() !== ""
         );
-
-        // genau eine Leerzeile vor Emoji-Zeilen sicherstellen
-        lines = normalizeEmojiSpacing(lines);
 
         noteWriteLocked = true;
 
