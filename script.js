@@ -1157,10 +1157,11 @@
                 gap: 6px;
                 margin-top: 8px;
                 margin-bottom: 10px;
+                justify-content: flex-start;
             }
             #cc-snippet-btns button {
                 position: relative;
-                flex: 1 1 calc(50% - 6px);
+                flex: 0 1 calc(11% - 6px);
                 padding: 8px 12px;
                 border: 1px solid #ccc;
                 border-radius: 4px;
@@ -1169,7 +1170,6 @@
                 font-size: 18px;
                 line-height: 1.3;
                 font-weight: 500;
-                min-width: 50px;
             }
             #cc-snippet-btns button:hover {
                 background: #e0e0e0;
