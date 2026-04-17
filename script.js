@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      2.2
+// @version      2.3
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -536,7 +536,7 @@
         },
         {
             label: `✅ GEOCHECKER OK (${getTodayStr()}) & MESSAGE`,
-            emoji: '✅✉️', shortcutKey: '2',
+            emoji: '✳️', shortcutKey: '2',
             value: `✅ GEOCHECKER OK (${getTodayStr()})\n\n✉️ MESSAGE:\n`,
             autoSave: false
         },
@@ -1173,6 +1173,22 @@
             }
             #cc-snippet-btns button:hover {
                 background: #e0e0e0;
+            }
+            @media (max-width: 768px) {
+                #cc-snippet-btns button {
+                    padding: 12px 14px;
+                    font-size: 20px;
+                    flex: 0 1 calc(12.5% - 5px);
+                }
+            }
+            @media (min-width: 769px) {
+                #cc-snippet-btns {
+                    flex-wrap: nowrap;
+                    overflow-x: auto;
+                }
+                #cc-snippet-btns button {
+                    flex: 0 0 auto;
+                }
             }
             .vl-shortcut-badge {
                 position: absolute;

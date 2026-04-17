@@ -1,8 +1,12 @@
 # Changelog
 
+## [2.3] - 2026-04-17
+### Changed
+- Snippet-Buttons nur mobil vergrößert & in 2 Zeilen
+
 ## [2.2] - 2026-04-17
 ### Changed
-Snippet-Buttons vergrößert & in 2 Zeilen
+- Snippet-Buttons vergrößert & in 2 Zeilen
 
 ## [2.1] - 2026-04-17
 ### Added
