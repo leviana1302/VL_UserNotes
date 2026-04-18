@@ -1,5 +1,9 @@
 # Changelog
 
+## [4.6] - 2026-04-18
+### Changed
+- größere Schrift & Padding in Messages
+
 ## [4.5] - 2026-04-18
 ### Fixed
 - mehrere Leerzeilen zu einer reduzieren beim Speichern

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      4.5
+// @version      4.6
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -1160,9 +1160,9 @@
             .checker-warning {
                 position: relative;
                 color: white;
-                padding: 6px 10px;
+                padding: 8px 12px;
                 border-radius: 4px;
-                font-size: 12px;
+                font-size: 13px;
                 box-shadow: 0 1px 3px rgba(0,0,0,0.2);
                 display: flex;
                 align-items: center;
@@ -1171,13 +1171,13 @@
                 margin-bottom: 4px;
             }
             .checker-warning button {
-                padding: 2px 6px;
+                padding: 4px 8px;
                 background: #fff;
                 border: none;
                 border-radius: 3px;
                 cursor: pointer;
                 font-weight: bold;
-                font-size: 11px;
+                font-size: 12px;
                 flex-shrink: 0;
             }
             #vl-notifications-container {
@@ -1227,25 +1227,25 @@
             #cc-snippet-btns button {
                 position: relative;
                 flex: 0 1 calc(11% - 6px);
-                padding: 8px 12px;
+                padding: 10px 14px;
                 border: 1px solid #ccc;
                 border-radius: 4px;
                 background: #f5f5f5;
                 cursor: pointer;
-                font-size: 16px;
+                font-size: 17px;
                 line-height: 1;
                 font-weight: 500;
                 text-align: center;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                min-height: 36px;
+                min-height: 40px;
             }
             #cc-snippet-btns button:hover { background: #e0e0e0; }
             @media (max-width: 768px) {
                 #cc-snippet-btns button {
-                    padding: 12px 14px;
-                    font-size: 18px;
+                    padding: 14px 16px;
+                    font-size: 19px;
                     flex: 0 1 calc(12.5% - 5px);
                 }
             }
@@ -1261,9 +1261,9 @@
             #vl-reset-coords-prompt {
                 position: relative;
                 color: white;
-                padding: 6px 10px;
+                padding: 8px 12px;
                 border-radius: 4px;
-                font-size: 12px;
+                font-size: 13px;
                 box-shadow: 0 1px 3px rgba(0,0,0,0.2);
                 display: flex;
                 align-items: center;
@@ -1275,11 +1275,11 @@
             #vl-reset-coords-prompt span { flex: 1; }
             #vl-reset-coords-prompt .vl-btn-ja,
             #vl-reset-coords-prompt .vl-btn-nein {
-                padding: 2px 6px;
+                padding: 4px 8px;
                 border-radius: 3px;
                 cursor: pointer;
                 font-weight: bold;
-                font-size: 11px;
+                font-size: 12px;
                 flex-shrink: 0;
             }
             #vl-reset-coords-prompt .vl-btn-ja {
@@ -1579,6 +1579,7 @@
         log("originalNoteText gesichert, Länge:", originalNoteText.length);
 
         // SOFORT: Leerzeilen in der gespeicherten Note reduzieren und speichern
+
 
         autoBeautifyOldNote();
         updateFirstCCLine(true);      // syncCCLineWithCorrectedCoords
