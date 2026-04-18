@@ -1,5 +1,9 @@
 # Changelog
 
+## [4.2] - 2026-04-18
+### Added
+- Kopieren der aktuellen Note in die Zwischenablage vor Reload
+
 ## [4.1] - 2026-04-18
 ### Added
 - Reload der Seite, wenn Note nicht gespeichert werden kann

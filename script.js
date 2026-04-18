@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      4.1
+// @version      4.2
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -1052,14 +1052,21 @@
         return true;
     }
 
-    /** Löst den Reload-Flow aus: Notification einblenden, dann Seite neu laden. */
+    /** Löst den Reload-Flow aus: Text in Zwischenablage, Notification, dann Seite neu laden. */
     function triggerSaveErrorReload() {
         if (saveErrorReloadTriggered) return;
         saveErrorReloadTriggered = true;
 
+        // Aktuellen Text der Textarea in Zwischenablage sichern (falls nicht gespeicherte Änderungen)
+        const currentText = DOM.note?.value ?? "";
+        if (currentText) {
+            copyToClipboard(currentText);
+            log(`Note-Text in Zwischenablage kopiert (${currentText.length} Zeichen)`);
+        }
+
         warn("Save-Fehler erkannt – Seite wird in " + SAVE_ERROR_RELOAD_DELAY + "ms neu geladen");
         showNotification(
-            "⚠️ Speichern fehlgeschlagen – lade Seite neu…",
+            "⚠️ Speichern fehlgeschlagen – Text in Zwischenablage, lade Seite neu…",
             "warn-SAVE-ERROR",
             null,
             { color: "#c62828" }
