@@ -1,5 +1,9 @@
 # Changelog
 
+## [4.1] - 2026-04-18
+### Added
+- Reload der Seite, wenn Note nicht gespeichert werden kann
+
 ## [4.0] - 2026-04-18
 ### Changed
 - Refactoring

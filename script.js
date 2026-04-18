@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      4.0
+// @version      4.1
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -1020,7 +1020,89 @@
     }
 
     // ════════════════════════════════════════════════════════════════════════════
-    // ⭐ 17. UI ENGINE (Styles + Elements)
+    // ⭐ 17. SAVE-ERROR HANDLER
+    // ════════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Wenn geocaching.com das Speichern einer Note ablehnt, erscheint unter der Note:
+     *   <span class="js-pcn-status validation-error">Es ist ein Fehler aufgetreten…</span>
+     * Der einzige zuverlässige Fix ist ein Hard-Reload (Strg+F5). Diese Sektion
+     * erkennt den Fehler automatisch und lädt die Seite neu.
+     */
+
+    /** Selector für das Fehler-Element. */
+    const SAVE_ERROR_SELECTOR = ".js-pcn-status.validation-error";
+
+    /** Teil-String, der im Element-Text stehen muss. */
+    const SAVE_ERROR_TEXT = "Es ist ein Fehler aufgetreten";
+
+    /** Verzögerung vor automatischem Reload (Nutzer soll Notification sehen). */
+    const SAVE_ERROR_RELOAD_DELAY = 2000;
+
+    /** Flag gegen Mehrfach-Trigger des Reload. */
+    let saveErrorReloadTriggered = false;
+
+    /** Prüft, ob das Fehler-Element im DOM sichtbar ist und den Fehlertext enthält. */
+    function isSaveErrorVisible() {
+        const el = document.querySelector(SAVE_ERROR_SELECTOR);
+        if (!el) return false;
+        if (!el.textContent.includes(SAVE_ERROR_TEXT)) return false;
+        // offsetParent === null bedeutet "nicht sichtbar" (display:none oder detached)
+        if (el.offsetParent === null) return false;
+        return true;
+    }
+
+    /** Löst den Reload-Flow aus: Notification einblenden, dann Seite neu laden. */
+    function triggerSaveErrorReload() {
+        if (saveErrorReloadTriggered) return;
+        saveErrorReloadTriggered = true;
+
+        warn("Save-Fehler erkannt – Seite wird in " + SAVE_ERROR_RELOAD_DELAY + "ms neu geladen");
+        showNotification(
+            "⚠️ Speichern fehlgeschlagen – lade Seite neu…",
+            "warn-SAVE-ERROR",
+            null,
+            { color: "#c62828" }
+        );
+        setTimeout(() => window.location.reload(), SAVE_ERROR_RELOAD_DELAY);
+    }
+
+    /**
+     * Startet einen MutationObserver, der die Note-Section auf das Fehler-Element
+     * beobachtet. Läuft die gesamte Script-Laufzeit (wird erst bei Trigger disconnected).
+     */
+    function initSaveErrorObserver() {
+        // Bereits beim Start sichtbar? (z.B. wenn Seite im Fehler-Zustand geladen wurde)
+        // Dann KEIN Reload – sonst würde ein Loop entstehen.
+        if (isSaveErrorVisible()) {
+            warn("Save-Fehler bereits beim Start sichtbar – Auto-Reload wird unterdrückt");
+            saveErrorReloadTriggered = true;   // blockiert spätere Trigger
+            return;
+        }
+
+        const noteSection = DOM.noteSection;
+        if (!noteSection) return warn("initSaveErrorObserver: noteSection nicht gefunden");
+
+        const observer = new MutationObserver(() => {
+            if (saveErrorReloadTriggered) return;
+            if (!isSaveErrorVisible()) return;
+            observer.disconnect();
+            triggerSaveErrorReload();
+        });
+
+        observer.observe(noteSection, {
+            childList:      true,
+            subtree:        true,
+            characterData:  true,
+            attributes:     true,
+            attributeFilter: ['style', 'class']
+        });
+
+        debug("Save-Error-Observer gestartet");
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // ⭐ 18. UI ENGINE (Styles + Elements)
     // ════════════════════════════════════════════════════════════════════════════
 
     /** Injiziert die CSS-Styles einmalig in den <head>. */
@@ -1376,7 +1458,7 @@
     }
 
     // ════════════════════════════════════════════════════════════════════════════
-    // ⭐ 18. KEYBOARD SHORTCUTS
+    // ⭐ 19. KEYBOARD SHORTCUTS
     // ════════════════════════════════════════════════════════════════════════════
 
     /** Tastatur-Event-Handler für alle Shortcuts. */
@@ -1439,7 +1521,7 @@
     }
 
     // ════════════════════════════════════════════════════════════════════════════
-    // ⭐ 19. START PIPELINE
+    // ⭐ 20. START PIPELINE
     // ════════════════════════════════════════════════════════════════════════════
 
     /** Einmalige Start-Sequenz nach Page-Load. */
@@ -1456,6 +1538,9 @@
         flushNoteChanges();
 
         addUI();
+
+        // Observer für Save-Fehler starten (nachdem UI + Note-Section da sind)
+        initSaveErrorObserver();
 
         // Reset-Coords-Prompt anzeigen, wenn Koordinaten korrigiert sind
         // UND die Note bereits "GEOCHECKER FALSCH" enthält
