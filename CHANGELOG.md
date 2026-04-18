@@ -1,5 +1,9 @@
 # Changelog
 
+## [4.4] - 2026-04-18
+### Fixed
+- Fokus nach einfügen von Snippets ins Textfeld
+
 ## [4.3] - 2026-04-18
 ### Changed
 - Benachrichtigung für internen Checker in blau

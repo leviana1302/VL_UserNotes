@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      4.3
+// @version      4.4
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -611,6 +611,8 @@
             ta.value = lines.join("\n");
             ta.dispatchEvent(new Event("input", { bubbles: true }));
             ta.setSelectionRange(ta.value.length, ta.value.length);
+            // Fokus mit Verzögerung setzen, damit React-Handler zuerst laufen können
+            setTimeout(() => ta.focus(), 10);
             return;
         }
 
@@ -629,6 +631,7 @@
             ta.dispatchEvent(new Event("input", { bubbles: true }));
             const newPos = before.length + 1 + text.length;
             ta.setSelectionRange(newPos, newPos);
+            setTimeout(() => ta.focus(), 10);
             return;
         }
 
@@ -639,6 +642,7 @@
         ta.value = lines.join("\n");
         ta.dispatchEvent(new Event("input", { bubbles: true }));
         ta.setSelectionRange(ta.value.length, ta.value.length);
+        setTimeout(() => ta.focus(), 10);
     }
 
     /** Führt ein Snippet vollständig aus: Text auflösen, einfügen, ggf. speichern. */
