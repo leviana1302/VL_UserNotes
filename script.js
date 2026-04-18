@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      4.2
+// @version      4.3
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -577,8 +577,8 @@
             value: `⛔ CHALLENGE NICHT ERFÜLLT (${getTodayStr()})`,
             autoSave: true
         },
-        { label: '🔒 CODE:',    emoji: '🔒', value: '🔒 CODE:' },
-        { label: '👉 HINT:',    emoji: '👉', value: '👉 HINT:' },
+        { label: '🔒 CODE:',    emoji: '🔒', value: '🔒 CODE: ' },
+        { label: '👉 HINT:',    emoji: '👉', value: '👉 HINT: ' },
         { label: '🚩 WP',       emoji: 'WP', value: '🚩 WP' },
         { label: '🚩 STAGE',    emoji: 'ST', value: '🚩 STAGE' },
         { label: '🚗 Parken: ', emoji: '🚗', value: '🚗 Parken: ' }
@@ -873,7 +873,7 @@
                     "⚠️ Integrierter Koordinatenchecker gefunden",
                     "warn-INTERNAL",
                     "#ctl00_ContentBody_lblSolutionChecker",
-                    { key: "INTERNAL", color: "#c62828", copyCoords: false }
+                    { key: "INTERNAL", color: "#1565c0", copyCoords: false }
                 );
             }
         }

@@ -1,5 +1,9 @@
 # Changelog
 
+## [4.3] - 2026-04-18
+### Changed
+- Benachrichtigung für internen Checker in blau
+
 ## [4.2] - 2026-04-18
 ### Added
 - Kopieren der aktuellen Note in die Zwischenablage vor Reload
