@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      4.6
+// @version      4.7
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -1227,19 +1227,19 @@
             #cc-snippet-btns button {
                 position: relative;
                 flex: 0 1 calc(11% - 6px);
-                padding: 10px 14px;
+                padding: 8px 12px;
                 border: 1px solid #ccc;
                 border-radius: 4px;
                 background: #f5f5f5;
                 cursor: pointer;
-                font-size: 17px;
+                font-size: 15px;
                 line-height: 1;
                 font-weight: 500;
                 text-align: center;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                min-height: 40px;
+                min-height: 36px;
             }
             #cc-snippet-btns button:hover { background: #e0e0e0; }
             @media (max-width: 768px) {
@@ -1348,7 +1348,7 @@
 
         const isTextLabel = /^[A-Za-z]+$/.test(emoji);
         if (isTextLabel) {
-            el.style.fontSize = "11px";
+            el.style.fontSize = "13px";
         } else if (SMALL_EMOJIS.has(emoji)) {
             el.style.fontSize = "16px";
             el.style.transform = `scale(${DEVICE.smallEmojiScale})`;
