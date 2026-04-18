@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      4.4
+// @version      4.5
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -186,9 +186,11 @@
         return container;
     }
 
-    // ════════════════════════════════════════════════════════════════════════════
-    // ⭐ 7. CORE: DATUM, KOORDINATEN, NOTE-IO
-    // ════════════════════════════════════════════════════════════════════════════
+    /**
+     * Beim Startup: Reduziere Leerzeilen in der gespeicherten Note SOFORT
+     * und speichere die bereinigte Version zurück.
+     * Dies funktioniert, weil wir direkt mit der echten Note arbeiten.
+     */
 
     /** Heutiges Datum im Format dd.mm.yyyy. */
     const getTodayStr = () => {
@@ -254,6 +256,31 @@
     }
 
     /**
+     * Reduziert alle aufeinanderfolgende Leerzeilen auf exakt EINE Leerzeile.
+     * Dies ist ROBUSTER als ein einfacher Filter und läuft ZUERST in writeLines().
+     */
+    function removeMultipleBlankLines(lines) {
+        const result = [];
+        let lastWasBlank = false;
+
+        for (const line of lines) {
+            const isBlank = line.trim() === "";
+
+            // Behalte die Zeile wenn:
+            // - Sie nicht leer ist, ODER
+            // - Es die erste Zeile ist, ODER
+            // - Die vorherige Zeile nicht leer war
+            if (!isBlank || result.length === 0 || !lastWasBlank) {
+                result.push(line);
+            }
+
+            lastWasBlank = isBlank;
+        }
+
+        return result;
+    }
+
+    /**
      * Schreibt Zeilen in die Textarea und speichert optional.
      * Reduziert überzählige Leerzeilen und normalisiert Emoji-Spacing.
      */
@@ -262,21 +289,29 @@
         if (!ta)              return err("writeLines: Textarea nicht gefunden");
         if (noteWriteLocked)  return err("writeLines: noteWriteLocked=true");
 
-        // 1) Vor jeder Emoji-Zeile genau eine Leerzeile sicherstellen
+        // 1) ZUERST: Alle aufeinanderfolgende Leerzeilen auf genau eine reduzieren
+        lines = removeMultipleBlankLines(lines);
+
+        // 2) DANN: Vor jeder Emoji-Zeile genau eine Leerzeile sicherstellen
         lines = normalizeEmojiSpacing(lines);
 
-        // 2) Aufeinanderfolgende Leerzeilen auf eine reduzieren
-        lines = lines.filter((line, idx, arr) =>
-            line.trim() !== "" || idx === 0 || arr[idx - 1].trim() !== ""
-        );
+        const cleanedText = lines.join("\n");
+
+        // 3) Speichere immer die gereinigten Zeilen im Puffer (für Konsistenz)
+        setWorkingNote(cleanedText);
 
         noteWriteLocked = true;
-        ta.value = lines.join("\n");
+        ta.value = cleanedText;
+
+        // WICHTIG: Input-Event ZUERST dispatchen (damit React seinen State aktualisiert)
         ta.dispatchEvent(new Event("input", { bubbles: true }));
 
         if (save) {
-            debug("writeLines → speichern");
-            DOM.saveBtn?.click();
+            // DANN warten und speichern (React braucht Zeit um State zu aktualisieren)
+            setTimeout(() => {
+                debug("writeLines → speichern nach React-Update");
+                DOM.saveBtn?.click();
+            }, 200);
         }
 
         setTimeout(() => {
@@ -1542,6 +1577,8 @@
         // Original-Text für Undo sichern
         originalNoteText = getSavedNote();
         log("originalNoteText gesichert, Länge:", originalNoteText.length);
+
+        // SOFORT: Leerzeilen in der gespeicherten Note reduzieren und speichern
 
         autoBeautifyOldNote();
         updateFirstCCLine(true);      // syncCCLineWithCorrectedCoords

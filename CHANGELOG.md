@@ -1,5 +1,9 @@
 # Changelog
 
+## [4.5] - 2026-04-18
+### Fixed
+- mehrere Leerzeilen zu einer reduzieren beim Speichern
+
 ## [4.4] - 2026-04-18
 ### Fixed
 - Fokus nach einfügen von Snippets ins Textfeld
