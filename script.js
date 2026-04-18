@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      4.7
+// @version      5.0
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -20,6 +20,13 @@
 
     const SCRIPT_VERSION = GM_info?.script?.version ?? "unbekannt";
     const SCRIPT_NAME    = GM_info?.script?.name    ?? "unbekannt";
+
+    /** GC-Code aus Seitenkopf auslesen (ändert sich nicht). */
+    const gcCode = (() => {
+        const el = document.getElementById("ctl00_ContentBody_CoordInfoLinkControl1_uxCoordInfoCode");
+        const code = el?.textContent?.trim() ?? null;
+        return code;
+    })();
 
     /** Zentrale Timing-Werte (ms). */
     const TIMINGS = {
@@ -186,12 +193,6 @@
         return container;
     }
 
-    /**
-     * Beim Startup: Reduziere Leerzeilen in der gespeicherten Note SOFORT
-     * und speichere die bereinigte Version zurück.
-     * Dies funktioniert, weil wir direkt mit der echten Note arbeiten.
-     */
-
     /** Heutiges Datum im Format dd.mm.yyyy. */
     const getTodayStr = () => {
         const t = new Date();
@@ -257,7 +258,6 @@
 
     /**
      * Reduziert alle aufeinanderfolgende Leerzeilen auf exakt EINE Leerzeile.
-     * Dies ist ROBUSTER als ein einfacher Filter und läuft ZUERST in writeLines().
      */
     function removeMultipleBlankLines(lines) {
         const result = [];
@@ -266,10 +266,6 @@
         for (const line of lines) {
             const isBlank = line.trim() === "";
 
-            // Behalte die Zeile wenn:
-            // - Sie nicht leer ist, ODER
-            // - Es die erste Zeile ist, ODER
-            // - Die vorherige Zeile nicht leer war
             if (!isBlank || result.length === 0 || !lastWasBlank) {
                 result.push(line);
             }
@@ -296,13 +292,13 @@
         lines = normalizeEmojiSpacing(lines);
 
         const cleanedText = lines.join("\n");
-
+        
         // 3) Speichere immer die gereinigten Zeilen im Puffer (für Konsistenz)
         setWorkingNote(cleanedText);
 
         noteWriteLocked = true;
         ta.value = cleanedText;
-
+        
         // WICHTIG: Input-Event ZUERST dispatchen (damit React seinen State aktualisiert)
         ta.dispatchEvent(new Event("input", { bubbles: true }));
 
@@ -562,7 +558,7 @@
     // ════════════════════════════════════════════════════════════════════════════
 
     /**
-     * Ein Snippet beschreibt einen einfügbaren Textbaustein.
+     * Ein Snippet beschreibt einen einfügbaren Textbaustein oder Link.
      *
      * Felder:
      *   label            – Anzeigename in Dropdown und Tooltip
@@ -572,6 +568,8 @@
      *   autoSave         – sofort speichern nach Einfügen?
      *   removeCC         – CC-Zeile (📌) am Anfang entfernen?
      *   confirmResetCoords – nach Einfügen Reset-Coords-Dialog zeigen?
+     *   isLink           – true wenn Snippet ein externer Link ist
+     *   linkUrl          – URL für isLink=true (Platzhalter: __GCCODE__)
      */
     const SNIPPETS = [
         { label: '➕ Snippet', value: '' },
@@ -616,7 +614,21 @@
         { label: '👉 HINT:',    emoji: '👉', value: '👉 HINT: ' },
         { label: '🚩 WP',       emoji: 'WP', value: '🚩 WP' },
         { label: '🚩 STAGE',    emoji: 'ST', value: '🚩 STAGE' },
-        { label: '🚗 Parken: ', emoji: '🚗', value: '🚗 Parken: ' }
+        { label: '🚗 Parken: ', emoji: '🚗', value: '🚗 Parken: ' },
+        {
+            label: '🔍 PUZZLE-COORDS (Desktop)',
+            emoji: '🔍',
+            value: ``,  // Link wird in applySnippet verarbeitet
+            isLink: true,
+            linkUrl: 'https://puzzle-coords.info/__GCCODE__'
+        },
+        {
+            label: '📱 PUZZLE-COORDS (Mobile)',
+            emoji: '📱',
+            value: ``,  // Link wird in applySnippet verarbeitet
+            isLink: true,
+            linkUrl: 'https://puzzle-coords.info/mobile/mobile_search.php?gc_code=__GCCODE__'
+        }
     ];
 
     // ════════════════════════════════════════════════════════════════════════════
@@ -683,6 +695,19 @@
     /** Führt ein Snippet vollständig aus: Text auflösen, einfügen, ggf. speichern. */
     async function applySnippet(sn) {
         log("applySnippet:", sn.label);
+        
+        // Link-Snippets: sofort öffnen (kein Text in Note)
+        if (sn.isLink) {
+            if (!gcCode) {
+                showNotification("GC-Code nicht gefunden.");
+                return;
+            }
+            const url = sn.linkUrl.replace("__GCCODE__", gcCode);
+            log(`Link geöffnet: ${sn.label}`);
+            window.open(url, "_blank");
+            return;
+        }
+
         const noteWasClosed = activateNote();
         if (!DOM.note) return;
 
@@ -1226,7 +1251,7 @@
             }
             #cc-snippet-btns button {
                 position: relative;
-                flex: 0 1 calc(11% - 6px);
+                flex: 0 1 calc(10% - 6px);
                 padding: 8px 12px;
                 border: 1px solid #ccc;
                 border-radius: 4px;
@@ -1246,7 +1271,7 @@
                 #cc-snippet-btns button {
                     padding: 14px 16px;
                     font-size: 19px;
-                    flex: 0 1 calc(12.5% - 5px);
+                    flex: 0 1 calc(10% - 5px);
                 }
             }
             .vl-shortcut-badge {
@@ -1384,6 +1409,9 @@
         select.id = "cc-snippets";
 
         SNIPPETS.forEach(sn => {
+            // Link-Snippets nicht im Dropdown anzeigen
+            if (sn.isLink) return;
+
             const opt = document.createElement("option");
             opt.textContent = sn.shortcutKey
                 ? `${sn.label}  [Alt+${sn.shortcutKey}]`
@@ -1487,7 +1515,23 @@
 
         const btnBar = document.createElement("div");
         btnBar.id = "cc-snippet-btns";
-        SNIPPETS.filter(sn => sn.emoji).forEach(sn => btnBar.appendChild(buildSnippetButton(sn)));
+        
+        // Normale Buttons
+        const normalSnippets = SNIPPETS.filter(sn => sn.emoji && !sn.isLink);
+        normalSnippets.forEach(sn => btnBar.appendChild(buildSnippetButton(sn)));
+        
+        // 3 unsichtbare Spacer-Buttons (um Link-Buttons auf neue Zeile zu bringen)
+        for (let i = 0; i < 3; i++) {
+            const spacer = document.createElement("button");
+            spacer.style.visibility = "hidden";
+            spacer.style.pointerEvents = "none";
+            btnBar.appendChild(spacer);
+        }
+        
+        // Link-Buttons
+        const linkSnippets = SNIPPETS.filter(sn => sn.isLink);
+        linkSnippets.forEach(sn => btnBar.appendChild(buildSnippetButton(sn)));
+        
         noteWrapper.insertBefore(btnBar, container.nextSibling);
 
         updateCCBtn();
@@ -1577,9 +1621,6 @@
         // Original-Text für Undo sichern
         originalNoteText = getSavedNote();
         log("originalNoteText gesichert, Länge:", originalNoteText.length);
-
-        // SOFORT: Leerzeilen in der gespeicherten Note reduzieren und speichern
-
 
         autoBeautifyOldNote();
         updateFirstCCLine(true);      // syncCCLineWithCorrectedCoords

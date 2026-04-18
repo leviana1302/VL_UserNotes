@@ -1,5 +1,9 @@
 # Changelog
 
+## [5.0] - 2026-04-18
+### Added
+- Buttons für PuzzleCoords-DB
+
 ## [4.7] - 2026-04-18
 ### Changed
 - kleinere Snippet-Icons für Desktop-Browser
