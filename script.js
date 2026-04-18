@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      2.5
+// @version      3.0
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -185,7 +185,9 @@
         }
 
         // genau eine Leerzeile vor Emoji-Zeilen sicherstellen (ZUERST!)
+        console.log("[VL] writeLines - vor normalizeEmojiSpacing:", lines.map((l, i) => `${i}: "${l.substring(0, 50)}"`));
         lines = normalizeEmojiSpacing(lines);
+        console.log("[VL] writeLines - nach normalizeEmojiSpacing:", lines.map((l, i) => `${i}: "${l.substring(0, 50)}"`));
 
         // mehrere Leerzeilen reduzieren (danach)
         lines = lines.filter((line, idx, arr) =>
@@ -531,7 +533,7 @@
         {
             label: `✅ GEOCHECKER OK (${getTodayStr()})`,
             emoji: '✅', shortcutKey: '1',
-            value: `\n✅ GEOCHECKER OK (${getTodayStr()})`,
+            value: `✅ GEOCHECKER OK (${getTodayStr()})`,
             autoSave: true
         },
         {
@@ -543,33 +545,35 @@
         {
             label: `❌ GEOCHECKER FALSCH (Koordinaten)`,
             emoji: '❌', shortcutKey: '3',
-            value: '\n❌ GEOCHECKER FALSCH (__COORDS__)', // Platzhalter → live ersetzt beim Auswählen
+            value: '❌ GEOCHECKER FALSCH (__COORDS__)', // Platzhalter → live ersetzt beim Auswählen
             removeCC: true,
             autoSave: true,
             confirmResetCoords: true
         },
-        { label: '❓ KEIN GEOCHECKER',              emoji: '❓', shortcutKey: '4', value: '\n❓ KEIN GEOCHECKER' },
-        { label: '✉️ MESSAGE:',                     emoji: '✉️', shortcutKey: '5', value: '\n✉️ MESSAGE:' },
-        { label: '⚠️ OBS: Field puzzle from here!', emoji: '⚠️', shortcutKey: '6', value: '\n⚠️ OBS: Field puzzle from here!' },
-        { label: '💡 SOLUTION:',                    emoji: '💡', shortcutKey: '7', value: '\n💡 SOLUTION:' },
-        { label: '🧩 JIGIDI:',                      emoji: '🧩', shortcutKey: '8', value: '\n🧩 JIGIDI:\n' },
-        { label: '🟢 CERTITUDE: & ✉️ MESSAGE:',     emoji: '🟢', shortcutKey: '9', value: '\n🟢 CERTITUDE: \n\n✉️ MESSAGE:\n' },
-        { label: '🔴 GC-APPS: & ✉️ MESSAGE:',       emoji: '🔴', shortcutKey: '0', value: '\n🔴 GC-APPS: \n\n✉️ MESSAGE:\n' },
+        { label: '❓ KEIN GEOCHECKER',              emoji: '❓', shortcutKey: '4', value: '❓ KEIN GEOCHECKER' },
+        { label: '✉️ MESSAGE:',                     emoji: '✉️', shortcutKey: '5', value: '✉️ MESSAGE:' },
+        { label: '⚠️ OBS: Field puzzle from here!', emoji: '⚠️', shortcutKey: '6', value: '⚠️ OBS: Field puzzle from here!' },
+        { label: '💡 SOLUTION:',                    emoji: '💡', shortcutKey: '7', value: '💡 SOLUTION:\n' },
+        { label: '🧩 JIGIDI:',                      emoji: '🧩', shortcutKey: '8', value: '🧩 JIGIDI:\n' },
+        { label: '🟢 CERTITUDE: & ✉️ MESSAGE:',     emoji: '🟢', shortcutKey: '9', value: '🟢 CERTITUDE: \n\n✉️ MESSAGE:\n' },
+        { label: '🔴 GC-APPS: & ✉️ MESSAGE:',       emoji: '🔴', shortcutKey: '0', value: '🔴 GC-APPS: \n\n✉️ MESSAGE:\n' },
         {
             label: `🏆 CHALLENGE ERFÜLLT (${getTodayStr()})`,
             emoji: '🏆',
-            value: `\n🏆 CHALLENGE ERFÜLLT (${getTodayStr()})`
+            value: `🏆 CHALLENGE ERFÜLLT (${getTodayStr()})`,
+            autoSave: true
         },
         {
             label: `⛔ CHALLENGE NICHT ERFÜLLT (${getTodayStr()})`,
             emoji: '⛔',
-            value: `\n⛔ CHALLENGE NICHT ERFÜLLT (${getTodayStr()})`
+            value: `⛔ CHALLENGE NICHT ERFÜLLT (${getTodayStr()})`,
+            autoSave: true
         },
-        { label: '🔒 CODE:',    emoji: '🔒', value: '\n🔒 CODE:' },
-        { label: '👉 HINT:',    emoji: '👉', value: '\n👉 HINT:' },
-        { label: '🚩 WP',       emoji: 'WP', value: '\n🚩 WP' },
-        { label: '🚩 STAGE',    emoji: 'ST', value: '\n🚩 STAGE' },
-        { label: '🚗 Parken: ', emoji: '🚗', value: '\n🚗 Parken: ' }
+        { label: '🔒 CODE:',    emoji: '🔒', value: '🔒 CODE:' },
+        { label: '👉 HINT:',    emoji: '👉', value: '👉 HINT:' },
+        { label: '🚩 WP',       emoji: 'WP', value: '🚩 WP' },
+        { label: '🚩 STAGE',    emoji: 'ST', value: '🚩 STAGE' },
+        { label: '🚗 Parken: ', emoji: '🚗', value: '🚗 Parken: ' }
     ];
 
     /**
@@ -578,7 +582,7 @@
      */
     async function applySnippet(sn) {
         const noteWasClosed = activateNote();
-        console.log("[VL] applySnippet: noteWasClosed =", noteWasClosed);
+        console.log("[VL] applySnippet aufgerufen:", sn.label, "| removeCC:", sn.removeCC);
         if (!DOM.note) return;
 
         // War die Note gerade geschlossen, warten bis die Textarea befüllt ist.
@@ -611,10 +615,24 @@
             }
         }
 
+        console.log("[VL] Vor insertSnippet - Note hat", DOM.note.value.split("\n").length, "Zeilen");
+        console.log("[VL] Zeilen:", DOM.note.value.split("\n").map((l, i) => `${i}: "${l.substring(0, 50)}"`));
         insertSnippet(text, noteWasClosed);
+        console.log("[VL] Nach insertSnippet - Note hat", DOM.note.value.split("\n").length, "Zeilen");
+        console.log("[VL] Zeilen:", DOM.note.value.split("\n").map((l, i) => `${i}: "${l.substring(0, 50)}"` ));
+
+        // Entferne CHALLENGE-Notification wenn "CHALLENGE ERFÜLLT" eingefügt wurde
+        if (text.includes("CHALLENGE ERFÜLLT")) {
+            const challengeNotif = document.getElementById("warn-CHALLENGE");
+            if (challengeNotif) {
+                challengeNotif.remove();
+                notified.delete("CHALLENGE");
+            }
+        }
 
         // CC-Zeile löschen (nur wenn wirklich eine CC-Zeile!)
         if (sn.removeCC) {
+            console.log("[VL] removeCC=true, entferne CC-Zeile");
             const lines = DOM.note.value.split("\n");
             if (isCCLine(lines[0])) lines.shift();
             writeLines(lines, true);
@@ -625,13 +643,17 @@
             return;
         }
 
+        console.log("[VL] removeCC=false/undefined, behalte CC-Zeile");
+
         // Speichern?
         if (sn.autoSave) {
+            console.log("[VL] autoSave=true, speichere");
             writeLines(DOM.note.value.split("\n"), true);
             return;
         }
 
         // Kein Speichern → Cursor sichtbar machen
+        console.log("[VL] Kein autoSave, nur Cursor-Focus");
         DOM.note.focus();
         resizeNoteTextarea();
         scrollToNote();
@@ -884,7 +906,7 @@
         "GC-APPS":    "GC-APPS",
         "CERTITUDE":  "CERTITUDE",
         "INTERNAL":   "GEOCHECKER",
-        "CHALLENGE":  "CHALLENGE",
+        "CHALLENGE ERFÜLLT":  "CHALLENGE",
         "JIGIDI":     "JIGIDI"
     };
 
@@ -921,6 +943,11 @@
             if (def.key !== "JIGIDI") foundAnyChecker = true;
 
             if (!saved.includes(def.key) && !notified.has(def.key)) {
+                // Wenn es eine CHALLENGE Notification ist und Note hat "CHALLENGE ERFÜLLT", nicht zeigen
+                if (def.key === "CHALLENGE" && getWorkingNote().toUpperCase().includes("CHALLENGE ERFÜLLT")) {
+                    return; // Skip dieser Notification
+                }
+
                 notified.add(def.key);
                 showNotification(def.msg, "warn-" + def.key, href, def);
             }
@@ -1038,13 +1065,13 @@
         if (!ta) return;
 
         let lines = ta.value.split("\n");
-        
+
         // Wenn "GEOCHECKER FALSCH", alte CC-Zeile am Anfang entfernen
         if (snippet.includes("GEOCHECKER FALSCH") && isCCLine(lines[0])) {
             console.debug("[VL] handleSolutionCheckerResult: entferne alte CC-Zeile");
             lines.shift();
         }
-        
+
         lines = beautifyLines(lines);
 
         let i = 0;
@@ -1057,12 +1084,12 @@
 
         scrollToNote();
         writeLines(lines, true);
-        
+
         // Warten bis writeLines fertig ist (noteWriteLocked wird auf false gesetzt)
         await new Promise(r => setTimeout(r, 400));
-        
+
         updateCCLine();
-        
+
         // Zeige Reset-Coords-Prompt wenn "GEOCHECKER FALSCH" und korrigierte Coords vorhanden
         console.log("[VL] handleSolutionCheckerResult Debug:", {
             snippetContent: snippet.substring(0, 50),
@@ -1070,7 +1097,7 @@
             cachedCoords,
             shouldShow: snippet.includes("GEOCHECKER FALSCH") && cachedCoords
         });
-        
+
         if (snippet.includes("GEOCHECKER FALSCH") && cachedCoords) {
             console.log("[VL] handleSolutionCheckerResult: zeige Reset-Coords-Prompt");
             showResetCoordsPrompt();
@@ -1243,9 +1270,9 @@
         // Nur auf Android aktivieren
         const ua = navigator.userAgent;
         const isAndroid = /Android/.test(ua);
-        
+
         console.log("[VL] initMobileViewport: isAndroid =", isAndroid);
-        
+
         if (!isAndroid) {
             return;
         }
@@ -1272,7 +1299,7 @@
             const noteSectionWidth = noteSection.offsetWidth;
             const viewportWidth = window.innerWidth;
             let zoomFactor = viewportWidth / noteSectionWidth;
-            
+
             // 3% weniger Zoom für perfektes Gleichgewicht
             zoomFactor = zoomFactor * 0.97;
 
@@ -1281,7 +1308,7 @@
             // Wende Zoom an (wie Finger-Zoom)
             document.body.style.zoom = zoomFactor;
             document.documentElement.style.zoom = zoomFactor;
-            
+
             // Scrolle nach oben-links
             window.scrollTo(0, 0);
 
@@ -1438,7 +1465,7 @@
             const isSafari = ua.includes('Safari') && !ua.includes('Chrome');
             const isIPad = ua.includes('iPad') || (ua.includes('Mac OS X') && navigator.maxTouchPoints >= 5);
             const isIPadSafari = isSafari && isIPad;
-            
+
             const smallEmojisScaleFactor = isIPadSafari ? 1.1 : 1.25;
 
             // Native Emojis als Text mit fester Höhe
@@ -1453,7 +1480,7 @@
 
             // Text-Labels (nur reine Buchstaben wie WP, ST)
             const isTextLabel = /^[A-Za-z]+$/.test(sn.emoji);
-            
+
             if (isTextLabel) {
                 emojiContainer.style.fontSize = "11px";
             } else {
@@ -1467,7 +1494,7 @@
                     emojiContainer.style.fontSize = "20px";
                 }
             }
-            
+
             b.appendChild(emojiContainer);
 
             // Badge mit Shortcut-Ziffer (unten rechts)

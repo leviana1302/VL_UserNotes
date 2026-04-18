@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.3] - 2026-04-18
+### Added
+- Challenge Checker Message erst bei Erfüllung ausblenden
+
+### Changed
+- keine Leerzeilen mehr vor Snippets beim Einfügen
+
 ## [2.5] - 2026-04-17
 ### Fixed
 - Fix Scale für iOS Safari
