@@ -1,5 +1,9 @@
 # Changelog
 
+## [4.0] - 2026-04-18
+### Changed
+- Refactoring
+
 ## [3.0] - 2026-04-18
 ### Added
 - Challenge Checker Message erst bei Erfüllung ausblenden

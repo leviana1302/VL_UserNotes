@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      3.0
+// @version      4.0
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -14,68 +14,134 @@
 (function () {
     'use strict';
 
-    // ============================================================================
-    // ⭐ GLOBAL / SETUP & DOM‑ENGINE
-    // - Versionsinfo, globale Flags, Script-Initialisierung
-    // - Zugriff auf DOM-Elemente
-    // - Zentrale Selektoren
-    // ============================================================================
+    // ════════════════════════════════════════════════════════════════════════════
+    // ⭐ 1. KONSTANTEN
+    // ════════════════════════════════════════════════════════════════════════════
 
-    /** Name und Versionsnummer des Userscripts (aus dem Header). */
     const SCRIPT_VERSION = GM_info?.script?.version ?? "unbekannt";
     const SCRIPT_NAME    = GM_info?.script?.name    ?? "unbekannt";
-    console.log(`=== ${SCRIPT_NAME} ${SCRIPT_VERSION} gestartet ===`);
 
-    /** DOM‑Cache: zentrale Zugriffspunkte auf wichtige Elemente. */
-    const DOM = {
-        /** Textarea für die Personal Cache Note. */
-        get note()                  { return document.getElementById("cacheNoteText"); },
-        /** Speichern‑Button der Note. */
-        get saveBtn()               { return document.querySelector(".js-pcn-submit"); },
-        /** Abbrechen‑Button der Note (schließt ohne Speichern). */
-        get cancelBtn()             { return document.querySelector(".js-pcn-cancel"); },
-        /** Element mit korrigierten Koordinaten (#uxLatLon). */
-        get corrected()             { return document.getElementById("uxLatLon"); },
-        /** Unsichtbare gespeicherte Note (#srOnlyCacheNote). */
-        get savedNote()             { return document.getElementById("srOnlyCacheNote"); },
-        /** "Note anzeigen"-Button. */
-        get viewBtn()               { return document.getElementById("viewCacheNote"); },
-        /** Label des integrierten GC‑Solution‑Checkers. */
-        get solutionCheckerLabel()  { return document.getElementById("ctl00_ContentBody_lblSolutionChecker"); },
-        /** Ergebnistext des integrierten GC‑Solution‑Checkers. */
-        get solutionResponse()      { return document.getElementById("lblSolutionResponse"); },
-        /** Button zum Öffnen des Koordinaten-Dialogs. */
-        get latLonLink()            { return document.getElementById("uxLatLonLink"); },
-        /** "Wiederherstellen"-Button (erscheint erst nach Klick auf latLonLink). */
-        get restoreBtn()            { return document.querySelector(".btn-cc-restore"); }
+    /** Zentrale Timing-Werte (ms). */
+    const TIMINGS = {
+        writeLockRelease:      300,   // Dauer bis noteWriteLocked wieder frei
+        saveSettleDelay:       400,   // Wartezeit nach writeLines vor Folgeaktion
+        resizeAfterOpen:       150,   // Wartezeit nach activateNote für resize
+        waitForElementShort:  1000,   // Default-Timeout waitFor
+        waitForElementMed:    1500,   // Medium Timeout
+        waitForElementLong:   5000,   // Langer Timeout (z.B. Koord-Dialog)
+        waitForSolution:     30000,   // Solution-Checker Response
+        startupDelay:          500,   // Pipeline-Start nach load-Event
+        checkerBtnDelay:       500,   // Nach CheckerButton-Klick
+        domMonitorInterval:    500,   // DOM-Monitor Interval
+        viewportZoomDelay:     100    // Mobile-Zoom Delay
     };
-
-    /** Arbeits‑Puffer für die Note. */
-    let pendingNoteText = null;
-
-    /** Flag: Wurde der Puffer verändert? */
-    let noteDirty = false;
-
-    /** Lock: verhindert Ping‑Pong zwischen writeLines() und React. */
-    let noteWriteLocked = false;
-
-    /**
-     * Ursprünglicher Notetext beim Seitenladen (vor allen Script-Änderungen).
-     * Wird in der Start-Pipeline einmalig befüllt.
-     */
-    /** Sicherungskopie der Note VOR allen Script-Änderungen (für Undo). */
-    let originalNoteText = null;
-
-    // ============================================================================
-    // ⭐ HELPER UTILITIES (generisch)
-    // ============================================================================
 
     /** Regex zur Erkennung gültiger CC-Koordinaten (N/E Minuten-Format). */
     const CC_COORD_REGEX_N = /N\s*\d+°\s*\d+\.\d+/;
     const CC_COORD_REGEX_E = /E\s*\d+°\s*\d+\.\d+/;
 
-    /** Generischer Poll-Helper: wartet, bis `predicate()` truthy ist. */
-    function waitFor(predicate, { interval = 50, timeoutMs = 1000 } = {}) {
+    /** Erkennt Zeilen, die mit einem Emoji (Unicode Extended_Pictographic) beginnen. */
+    const EMOJI_START_RE = /^\p{Extended_Pictographic}/u;
+
+    /** Exakte Ersetzungen für Beautify (komplette Zeile). */
+    const BEAUTIFY_EXACT = {
+        "---":              "",
+        "MESSAGE:":         "✉️ MESSAGE:",
+        "SOLUTION:":        "💡 SOLUTION:",
+        "KEIN GEOCHECKER":  "❓ KEIN GEOCHECKER"
+    };
+
+    /** Präfix-Ersetzungen (Zeile fängt mit Key an → Emoji davor). */
+    const BEAUTIFY_PREFIX = [
+        ["MESSAGE:",                "✉️ "],
+        ["GC-APPS:",                "🔴 "],
+        ["GEOCHECKER OK",           "✅ "],
+        ["GEOCHECKER FALSCH",       "❌ "],
+        ["CERTITUDE:",              "🟢 "],
+        ["CHALLENGE ERFÜLLT",       "🏆 "],
+        ["CHALLENGE NICHT ERFÜLLT", "⛔ "],
+        ["HINT:",                   "👉 "],
+        ["WP",                      "🚩 "],
+        ["STAGE",                   "🚩 "],
+        ["JIGIDI",                  "🧩 "]
+    ];
+
+    /** Emojis, die kleiner dargestellt werden und Scale-Fix brauchen. */
+    const SMALL_EMOJIS = new Set(["✳️", "✉️", "⚠️"]);
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // ⭐ 2. LOGGER
+    // ════════════════════════════════════════════════════════════════════════════
+
+    const log   = (...args) => console.log("[VL]",   ...args);
+    const debug = (...args) => console.debug("[VL]", ...args);
+    const warn  = (...args) => console.warn("[VL]",  ...args);
+    const err   = (...args) => console.error("[VL]", ...args);
+
+    log(`=== ${SCRIPT_NAME} ${SCRIPT_VERSION} gestartet ===`);
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // ⭐ 3. DEVICE DETECTION (einmalig beim Script-Start)
+    // ════════════════════════════════════════════════════════════════════════════
+
+    const DEVICE = (() => {
+        const ua        = navigator.userAgent;
+        const isAndroid = /Android/.test(ua);
+        const isSafari  = ua.includes('Safari') && !ua.includes('Chrome');
+        const isIPad    = ua.includes('iPad') ||
+                          (ua.includes('Mac OS X') && navigator.maxTouchPoints >= 5);
+        const isIPadSafari = isSafari && isIPad;
+        // iPad-Safari rendert die problematischen Emojis fast korrekt (1.1), andere zu klein (1.25)
+        const smallEmojiScale = isIPadSafari ? 1.1 : 1.25;
+
+        debug("Device:", { isAndroid, isSafari, isIPad, isIPadSafari, smallEmojiScale });
+        return { isAndroid, isSafari, isIPad, isIPadSafari, smallEmojiScale };
+    })();
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // ⭐ 4. DOM-ZUGRIFFE (zentral)
+    // ════════════════════════════════════════════════════════════════════════════
+
+    /** Zentraler Zugriffspunkt auf wichtige DOM-Elemente (immer live abgefragt). */
+    const DOM = {
+        get note()                 { return document.getElementById("cacheNoteText"); },
+        get saveBtn()              { return document.querySelector(".js-pcn-submit"); },
+        get cancelBtn()            { return document.querySelector(".js-pcn-cancel"); },
+        get corrected()            { return document.getElementById("uxLatLon"); },
+        get savedNote()            { return document.getElementById("srOnlyCacheNote"); },
+        get viewBtn()              { return document.getElementById("viewCacheNote"); },
+        get solutionCheckerLabel() { return document.getElementById("ctl00_ContentBody_lblSolutionChecker"); },
+        get solutionResponse()     { return document.getElementById("lblSolutionResponse"); },
+        get latLonLink()           { return document.getElementById("uxLatLonLink"); },
+        get restoreBtn()           { return document.querySelector(".btn-cc-restore"); },
+        get noteSection()          { return document.querySelector(".Note.PersonalCacheNote"); }
+    };
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // ⭐ 5. STATE (Arbeits-Puffer, Locks, Ursprungs-Text)
+    // ════════════════════════════════════════════════════════════════════════════
+
+    /** Arbeits-Puffer für die Note (null = noch nicht geladen). */
+    let pendingNoteText = null;
+
+    /** Flag: Wurde der Puffer verändert und muss geschrieben werden? */
+    let noteDirty = false;
+
+    /** Lock gegen Ping-Pong zwischen writeLines() und React. */
+    let noteWriteLocked = false;
+
+    /** Sicherungskopie der Note VOR allen Script-Änderungen (für Undo). */
+    let originalNoteText = null;
+
+    /** Cache für korrigierte Koordinaten (wird per MutationObserver aktualisiert). */
+    let cachedCoords = null;
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // ⭐ 6. HELPER UTILITIES
+    // ════════════════════════════════════════════════════════════════════════════
+
+    /** Pollt `predicate()`, bis er truthy ist oder das Timeout erreicht ist. */
+    function waitFor(predicate, { interval = 50, timeoutMs = TIMINGS.waitForElementShort } = {}) {
         return new Promise(resolve => {
             const start = Date.now();
             const tick = () => {
@@ -89,14 +155,16 @@
         });
     }
 
-    /** Kopiert Text in die Zwischenablage – mit Mobile-Fallback. */
+    /** Schläft `ms` Millisekunden. */
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+    /** Kopiert Text in die Zwischenablage (mit Mobile-Fallback). */
     function copyToClipboard(text) {
         if (!text) return;
         navigator.clipboard.writeText(text).catch(() => {
             const ta = document.createElement('textarea');
             ta.value = text;
-            ta.style.position = 'fixed';
-            ta.style.opacity = '0';
+            ta.style.cssText = "position:fixed;opacity:0";
             document.body.appendChild(ta);
             ta.select();
             document.execCommand('copy');
@@ -104,113 +172,60 @@
         });
     }
 
-    /** Prüft, ob die Note aktuell geöffnet ist. */
-    const isNoteOpen = () => DOM.viewBtn?.style.display === "none";
+    /** Stellt sicher, dass der Notifications-Container über der Note existiert. */
+    function ensureNotificationsContainer() {
+        let container = document.getElementById("vl-notifications-container");
+        if (container) return container;
 
-    // ============================================================================
-    // ⭐ CORE UTILITIES
-    // - Basisfunktionen für Datum, Koordinaten, Note-Handling, Schreiben/Speichern
-    // ============================================================================
+        const noteSection = DOM.noteSection;
+        if (!noteSection?.parentElement) return null;
 
-    /** Gibt das heutige Datum im Format dd.mm.yyyy zurück. */
-    const getTodayStr = () => {
-        const today = new Date();
-        const dd   = String(today.getDate()).padStart(2, "0");
-        const mm   = String(today.getMonth() + 1).padStart(2, "0");
-        const yyyy = today.getFullYear();
-        return `${dd}.${mm}.${yyyy}`;
-    };
-
-    /** Liest die korrigierten Koordinaten aus #uxLatLon aus. */
-    const getCorrectedCoords = () => {
-        const el = DOM.corrected;
-        const res = el && el.classList.contains("italic")
-            ? el.textContent.trim().replace(/'/g, "")
-            : null;
-        console.debug("[VL] getCorrectedCoords:", res);
-        return res;
-    };
-
-    /** Koordinaten-Cache + Observer */
-    let cachedCoords = getCorrectedCoords();
-    console.debug("[VL] Initiale Koordinaten:", cachedCoords);
-
-    {
-        const coordsEl = DOM.corrected;
-        if (coordsEl) {
-            const observer = new MutationObserver(async () => {
-                const newCoords = getCorrectedCoords();
-                if (newCoords && newCoords !== cachedCoords) {
-                    console.debug("[VL] Koordinaten geändert:", newCoords);
-                    cachedCoords = newCoords;
-
-                    // Dropdown-Label aktualisieren, falls UI schon vorhanden
-                    const falschOpt = document.querySelector('#cc-snippets [data-vl-key="falsch"]');
-                    if (falschOpt) {
-                        const hint = falschOpt.dataset.shortcutKey ? `  [Alt+${falschOpt.dataset.shortcutKey}]` : "";
-                        falschOpt.textContent = `❌ GEOCHECKER FALSCH (${newCoords})${hint}`;
-                    }
-
-                    // warten, bis srOnlyCacheNote wirklich geladen ist (mobil wichtig!)
-                    await waitForSavedNoteLoaded();
-                    await autoBeautifyOldNote();
-
-                    // Änderungen in die Textarea schreiben und speichern
-                    await flushNoteChanges();
-                }
-            });
-            observer.observe(coordsEl, {
-                childList: true,
-                characterData: true,
-                subtree: true,
-                attributes: true,           // iOS/Android: italic-Klasse wird per Attribut gesetzt
-                attributeFilter: ['class']
-            });
-        }
+        container = document.createElement("div");
+        container.id = "vl-notifications-container";
+        noteSection.parentElement.insertBefore(container, noteSection);
+        return container;
     }
 
-    /** Liefert den gespeicherten Notiztext aus srOnlyCacheNote. */
+    // ════════════════════════════════════════════════════════════════════════════
+    // ⭐ 7. CORE: DATUM, KOORDINATEN, NOTE-IO
+    // ════════════════════════════════════════════════════════════════════════════
+
+    /** Heutiges Datum im Format dd.mm.yyyy. */
+    const getTodayStr = () => {
+        const t = new Date();
+        return `${String(t.getDate()).padStart(2, "0")}.${String(t.getMonth() + 1).padStart(2, "0")}.${t.getFullYear()}`;
+    };
+
+    /** Liest korrigierte Koordinaten aus #uxLatLon (nur wenn .italic-Klasse vorhanden). */
+    function getCorrectedCoords() {
+        const el = DOM.corrected;
+        if (!el?.classList.contains("italic")) return null;
+        return el.textContent.trim().replace(/'/g, "");
+    }
+
+    /** Liefert die gespeicherte Note (schreibgeschützter Textinhalt). */
     const getSavedNote = () => DOM.savedNote?.textContent ?? "";
 
-    /** Schreibt Zeilen in die Textarea und speichert optional. */
-    function writeLines(lines, save = false) {
-        const ta = DOM.note;
-        if (!ta) {
-            console.error("[VL] writeLines abgebrochen: Textarea nicht gefunden");
-            return;
-        }
-        if (noteWriteLocked) {
-            console.error("[VL] writeLines abgebrochen: noteWriteLocked=true");
-            return;
-        }
+    /** Prüft, ob die Notiz aktuell geöffnet ist. */
+    const isNoteOpen = () => DOM.viewBtn?.style.display === "none";
 
-        // genau eine Leerzeile vor Emoji-Zeilen sicherstellen (ZUERST!)
-        console.log("[VL] writeLines - vor normalizeEmojiSpacing:", lines.map((l, i) => `${i}: "${l.substring(0, 50)}"`));
-        lines = normalizeEmojiSpacing(lines);
-        console.log("[VL] writeLines - nach normalizeEmojiSpacing:", lines.map((l, i) => `${i}: "${l.substring(0, 50)}"`));
+    /** Wartet, bis #srOnlyCacheNote im DOM verfügbar ist. */
+    const waitForSavedNoteLoaded = () =>
+        waitFor(() => DOM.savedNote, { interval: 50, timeoutMs: TIMINGS.waitForElementShort });
 
-        // mehrere Leerzeilen reduzieren (danach)
-        lines = lines.filter((line, idx, arr) =>
-            line.trim() !== "" || idx === 0 || arr[idx - 1].trim() !== ""
-        );
-
-        noteWriteLocked = true;
-
-        ta.value = lines.join("\n");
-        ta.dispatchEvent(new Event("input", { bubbles: true }));
-
-        if (save) {
-            console.debug("[VL] speichern");
-            DOM.saveBtn?.click();
-        }
-
-        setTimeout(() => {
-            noteWriteLocked = false;
-            console.debug("[VL] Lock aufgehoben");
-        }, 300);
+    /** Wartet auf korrigierte Koordinaten und aktualisiert cachedCoords. */
+    async function waitForCoords(timeoutMs = 2000) {
+        if (cachedCoords) return cachedCoords;
+        const result = await waitFor(() => {
+            const c = getCorrectedCoords();
+            if (c) cachedCoords = c;
+            return c;
+        }, { interval: 100, timeoutMs });
+        debug("waitForCoords →", result);
+        return result;
     }
 
-    /** Passt die Höhe der Textarea dynamisch an. */
+    /** Passt die Höhe der Textarea dynamisch an den Inhalt an. */
     function resizeNoteTextarea(extra = 20) {
         const ta = DOM.note;
         if (!ta) return;
@@ -219,76 +234,72 @@
     }
 
     /** Scrollt sanft zur Textarea. */
-    function scrollToNote() {
-        DOM.note?.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
+    const scrollToNote = () => DOM.note?.scrollIntoView({ behavior: "smooth", block: "center" });
 
-    /** Öffnet die Notiz, falls sie geschlossen ist. */
+    /** Öffnet die Notiz, falls sie geschlossen ist. Returns `true`, wenn geöffnet wurde. */
     function activateNote() {
         const viewBtn = DOM.viewBtn;
-        if (!viewBtn) return false;
-        if (isNoteOpen()) return false;
-
+        if (!viewBtn || isNoteOpen()) return false;
         viewBtn.click();
-        setTimeout(() => resizeNoteTextarea(50), 150);
+        setTimeout(() => resizeNoteTextarea(50), TIMINGS.resizeAfterOpen);
         return true;
     }
 
     /** Schließt die Notiz ohne zu speichern. */
     function cancelNote() {
-        if (!isNoteOpen()) {
-            console.warn("[VL] ESC ignoriert: Note ist nicht offen");
-            return;
-        }
-        const cancelBtn = DOM.cancelBtn;
-        if (!cancelBtn) {
-            console.warn("[VL] ESC ignoriert: Abbrechen-Button nicht gefunden");
-            return;
-        }
-        console.log("[VL] Shortcut: ESC → Note schließen ohne Speichern");
-        cancelBtn.click();
-    }
-
-    /** Wartet, bis srOnlyCacheNote im DOM verfügbar ist. */
-    function waitForSavedNoteLoaded() {
-        return waitFor(() => DOM.savedNote, { interval: 50, timeoutMs: 1000 });
+        if (!isNoteOpen())    return warn("ESC ignoriert: Note ist nicht offen");
+        if (!DOM.cancelBtn)   return warn("ESC ignoriert: Abbrechen-Button nicht gefunden");
+        log("Shortcut ESC → Note schließen ohne Speichern");
+        DOM.cancelBtn.click();
     }
 
     /**
-     * Wartet auf korrigierte Koordinaten und aktualisiert cachedCoords.
-     * Nötig auf Mobile, wo #uxLatLon erst nach dem Script-Start bereit ist.
+     * Schreibt Zeilen in die Textarea und speichert optional.
+     * Reduziert überzählige Leerzeilen und normalisiert Emoji-Spacing.
      */
-    async function waitForCoords(timeoutMs = 2000) {
-        if (cachedCoords) return cachedCoords;
-        const result = await waitFor(() => {
-            const c = getCorrectedCoords();
-            if (c) cachedCoords = c;
-            return c;
-        }, { interval: 100, timeoutMs });
-        console.debug("[VL] waitForCoords →", result);
-        return result;
+    function writeLines(lines, save = false) {
+        const ta = DOM.note;
+        if (!ta)              return err("writeLines: Textarea nicht gefunden");
+        if (noteWriteLocked)  return err("writeLines: noteWriteLocked=true");
+
+        // 1) Vor jeder Emoji-Zeile genau eine Leerzeile sicherstellen
+        lines = normalizeEmojiSpacing(lines);
+
+        // 2) Aufeinanderfolgende Leerzeilen auf eine reduzieren
+        lines = lines.filter((line, idx, arr) =>
+            line.trim() !== "" || idx === 0 || arr[idx - 1].trim() !== ""
+        );
+
+        noteWriteLocked = true;
+        ta.value = lines.join("\n");
+        ta.dispatchEvent(new Event("input", { bubbles: true }));
+
+        if (save) {
+            debug("writeLines → speichern");
+            DOM.saveBtn?.click();
+        }
+
+        setTimeout(() => {
+            noteWriteLocked = false;
+            debug("Write-Lock aufgehoben");
+        }, TIMINGS.writeLockRelease);
     }
 
-    /** Speichert den Puffer pendingNoteText in die Textarea. */
-    async function flushNoteChanges() {
+    /** Schreibt den Puffer `pendingNoteText` in die Textarea und speichert. */
+    function flushNoteChanges() {
         if (!noteDirty || pendingNoteText === null) return;
-
-        console.debug("[VL] Flush: Änderungen vorhanden → speichern");
-
+        debug("Flush: Puffer wird gespeichert");
         activateNote();
-
-        const lines = pendingNoteText.split("\n");
-        writeLines(lines, true);
-
+        writeLines(pendingNoteText.split("\n"), true);
         noteDirty = false;
         pendingNoteText = null;
     }
 
-    // ============================================================================
-    // ⭐ WORKING‑NOTE ENGINE (Pufferverwaltung)
-    // ============================================================================
+    // ════════════════════════════════════════════════════════════════════════════
+    // ⭐ 8. WORKING-NOTE (Pufferverwaltung)
+    // ════════════════════════════════════════════════════════════════════════════
 
-    /** Liefert den aktuellen Arbeits-Puffer oder lädt ihn aus der gespeicherten Note. */
+    /** Liefert den Arbeits-Puffer (lädt ihn bei Bedarf aus der gespeicherten Note). */
     function getWorkingNote() {
         if (pendingNoteText !== null) return pendingNoteText;
         pendingNoteText = getSavedNote();
@@ -301,50 +312,23 @@
         noteDirty = true;
     }
 
-    // ============================================================================
-    // ⭐ BEAUTIFY-ENGINE
-    // ============================================================================
+    // ════════════════════════════════════════════════════════════════════════════
+    // ⭐ 9. BEAUTIFY ENGINE
+    // ════════════════════════════════════════════════════════════════════════════
 
-    /** Exakte Ersetzungen für Beautify. */
-    const BEAUTIFY_EXACT = {
-        "---": "",
-        "MESSAGE:": "✉️ MESSAGE:",
-        "SOLUTION:": "💡 SOLUTION:",
-        "KEIN GEOCHECKER": "❓ KEIN GEOCHECKER"
-    };
-
-    /** Präfix‑Ersetzungen → Emoji. */
-    const BEAUTIFY_PREFIX = [
-        ["MESSAGE:",              "✉️ "],
-        ["GC-APPS:",              "🔴 "],
-        ["GEOCHECKER OK",         "✅ "],
-        ["GEOCHECKER FALSCH",     "❌ "],
-        ["CERTITUDE:",            "🟢 "],
-        ["CHALLENGE ERFÜLLT",     "🏆 "],
-        ["CHALLENGE NICHT ERFÜLLT", "⛔ "],
-        ["HINT:",                 "👉 "],
-        ["WP",                    "🚩 "],
-        ["STAGE",                 "🚩 "],
-        ["JIGIDI",                "🧩 "]
-    ];
-
-    /** Wendet Emoji-Präfixe und exakte Ersetzungen auf jede Zeile an. */
     /**
-     * Stellt sicher, dass vor jeder Zeile, die mit einem Emoji beginnt,
-     * genau eine Leerzeile steht – außer ganz am Anfang der Note.
-     * Überzählige Leerzeilen werden auf genau eine reduziert.
+     * Stellt sicher, dass vor jeder Emoji-Zeile genau eine Leerzeile steht
+     * (außer am Anfang). Überzählige Leerzeilen werden reduziert.
      */
-    const EMOJI_START_RE = /^\p{Extended_Pictographic}/u;
-
     function normalizeEmojiSpacing(lines) {
         const result = [];
         for (const line of lines) {
             if (line.trim() !== "" && EMOJI_START_RE.test(line.trim()) && result.length > 0) {
-                // Überschüssige Leerzeilen am Ende entfernen
+                // Vorherige Leerzeilen entfernen
                 while (result.length > 0 && result[result.length - 1].trim() === "") {
                     result.pop();
                 }
-                // Genau eine Leerzeile vor der Emoji-Zeile
+                // Genau eine Leerzeile einfügen
                 result.push("");
             }
             result.push(line);
@@ -352,6 +336,7 @@
         return result;
     }
 
+    /** Wendet exakte und Präfix-Ersetzungen auf jede Zeile an, dann Emoji-Spacing. */
     function beautifyLines(lines) {
         const result = [];
 
@@ -380,11 +365,11 @@
         return normalizeEmojiSpacing(result);
     }
 
-    // ============================================================================
-    // ⭐ CC ENGINE (Koordinaten-Logik)
-    // ============================================================================
+    // ════════════════════════════════════════════════════════════════════════════
+    // ⭐ 10. CC ENGINE (Koordinaten-Logik)
+    // ════════════════════════════════════════════════════════════════════════════
 
-    /** Prüft, ob eine Zeile eine gültige CC-Zeile mit Koordinaten ist. */
+    /** Prüft, ob eine Zeile eine gültige CC-Zeile (📌 + N/E-Koords) ist. */
     function isCCLine(line) {
         if (!line) return false;
         const t = line.trim();
@@ -393,75 +378,58 @@
             && CC_COORD_REGEX_E.test(t);
     }
 
-    /** Formatiert alte "~* CC:"-Zeilen in das neue 📌-Format. */
+    /** Formatiert "~* CC:"-Zeilen in das neue 📌-Format. */
     function formatOldCC(line) {
         const t = line.replace(/^~\* CC:\s*/, "").replace(/\s*~\*$/, "").trim();
-
         const match = t.match(/(N\s*\d+°\s*\d+\.\d+)\s+(E)\s*(\d+)°\s*(\d+\.\d+)/i);
         if (!match) return `📌 (alt) ${t}`;
-
         const [, north, eastPrefix, eastDegRaw, eastRest] = match;
-        const eastDeg = eastDegRaw.padStart(3, "0");
-
-        return `📌 ${north} ${eastPrefix} ${eastDeg}° ${eastRest}`;
+        return `📌 ${north} ${eastPrefix} ${eastDegRaw.padStart(3, "0")}° ${eastRest}`;
     }
 
-    /** Entfernt alte CC-Zeilen und fügt eine neue CC-Zeile ein. */
-    const applyCC = coords => {
-        console.debug("[VL] applyCC mit coords:", coords);
-
-        let lines = getSavedNote().split("\n");
-
-        lines = lines.filter(l => !l.startsWith("📌"));
-
-        let firstRemoved = false;
-        lines = lines.map(l => {
-            if (l.startsWith("~* CC:")) {
-                if (!firstRemoved) {
-                    firstRemoved = true;
-                    return null;
-                }
-                return formatOldCC(l);
-            }
-            return l;
-        }).filter(Boolean);
-
-        lines.unshift(`📌 ${coords}`);
-
-        lines = beautifyLines(lines);
-        setWorkingNote(lines.join("\n"));
-    };
-
-    /** Ersetzt die erste CC-Zeile oder fügt eine neue ein. */
-    const replaceCC = (lines, coords) => {
-        console.debug("[VL] replaceCC mit coords:", coords);
+    /** Ersetzt die erste CC-Zeile oder fügt eine am Anfang ein. Mutiert `lines`. */
+    function replaceCC(lines, coords) {
         const idx = lines.findIndex(isCCLine);
         if (idx !== -1) lines[idx] = `📌 ${coords}`;
         else lines.unshift(`📌 ${coords}`);
         return lines;
-    };
+    }
 
-    /** Formatiert alte "~* CC:"-Notizen beim Laden der Seite. */
-    async function autoBeautifyOldNote() {
+    /** CC-Aktion: entfernt alle 📌-Zeilen, schreibt eine neue an den Anfang. */
+    function applyCC(coords) {
+        debug("applyCC", coords);
+        let lines = getSavedNote().split("\n").filter(l => !l.startsWith("📌"));
+
+        // Alte "~* CC:"-Zeilen: erste wird zur neuen CC-Zeile, weitere werden formatiert
+        let firstRemoved = false;
+        lines = lines.map(l => {
+            if (!l.startsWith("~* CC:")) return l;
+            if (!firstRemoved) { firstRemoved = true; return null; }
+            return formatOldCC(l);
+        }).filter(Boolean);
+
+        lines.unshift(`📌 ${coords}`);
+        setWorkingNote(beautifyLines(lines).join("\n"));
+    }
+
+    /** Formatiert alte "~* CC:"-Notizen beim Laden der Seite in das neue Format. */
+    function autoBeautifyOldNote() {
         const saved = getWorkingNote();
-        // Ausgabe der ursprünglichen Note
-        console.log("[VL] Ursprüngliche Note:\n" + saved);
-        let lines = saved.split("\n");
+        log("Ursprüngliche Note:\n" + saved);
 
+        let lines = saved.split("\n");
         const coords = getCorrectedCoords();
-        console.log("[VL] Korrigierte Koordinaten:", coords ?? "(keine)");
+        log("Korrigierte Koordinaten:", coords ?? "(keine)");
         if (!coords) return;
 
-        const hasOldCC = lines.some(l => l.startsWith("~* CC:"));
-
-        if (hasOldCC) {
-            let firstRemoved = false;
-            let newLines = [];
-
+        // Pfad A: Alte "~* CC:"-Zeilen vorhanden → komplett konvertieren
+        if (lines.some(l => l.startsWith("~* CC:"))) {
+            let firstConverted = false;
+            const newLines = [];
             for (const line of lines) {
                 if (line.startsWith("~* CC:")) {
-                    if (!firstRemoved) {
-                        firstRemoved = true;
+                    if (!firstConverted) {
+                        firstConverted = true;
                         newLines.push(`📌 ${coords}`);
                     } else {
                         newLines.push(formatOldCC(line));
@@ -470,34 +438,30 @@
                     newLines.push(line);
                 }
             }
-
-            newLines = beautifyLines(newLines);
-            setWorkingNote(newLines.join("\n"));
+            setWorkingNote(beautifyLines(newLines).join("\n"));
             return;
         }
 
-        const hasNewCC = lines.some(isCCLine);
-        if (!hasNewCC) {
-            // Keine CC-Zeile vorhanden → neu einfügen
+        // Pfad B: Keine CC-Zeile vorhanden → neu am Anfang einfügen
+        const ccIdx = lines.findIndex(isCCLine);
+        if (ccIdx === -1) {
             lines.unshift(`📌 ${coords}`);
-            lines = beautifyLines(lines);
-            setWorkingNote(lines.join("\n"));
-        } else {
-            // Vorhandene CC-Zeile auf aktuelle Koordinaten aktualisieren
-            const idx = lines.findIndex(isCCLine);
-            const expected = `📌 ${coords}`;
-            if (lines[idx].trim() !== expected) {
-                console.debug("[VL] autoBeautifyOldNote: CC-Zeile aktualisiert →", expected);
-                lines[idx] = expected;
-                lines = beautifyLines(lines);
-                setWorkingNote(lines.join("\n"));
-            }
+            setWorkingNote(beautifyLines(lines).join("\n"));
+            return;
+        }
+
+        // Pfad C: Vorhandene CC-Zeile ggf. auf aktuelle Koordinaten aktualisieren
+        const expected = `📌 ${coords}`;
+        if (lines[ccIdx].trim() !== expected) {
+            debug("autoBeautifyOldNote: CC-Zeile aktualisiert →", expected);
+            lines[ccIdx] = expected;
+            setWorkingNote(beautifyLines(lines).join("\n"));
         }
     }
 
     /**
      * Aktualisiert die erste CC-Zeile in der Textarea auf `cachedCoords`.
-     * @param {boolean} onlyIfChanged - wenn true, nur schreiben, wenn sich etwas ändert
+     * @param {boolean} onlyIfChanged  true = nur schreiben bei Unterschied
      */
     function updateFirstCCLine(onlyIfChanged = false) {
         if (!cachedCoords) return;
@@ -514,19 +478,65 @@
         writeLines(lines, true);
     }
 
-    /** Vergleicht korrigierte Koordinaten mit der CC-Zeile und aktualisiert sie. */
-    const syncCCLineWithCorrectedCoords = () => updateFirstCCLine(true);
-
-    /** Aktualisiert die CC-Zeile in der Textarea und speichert. */
-    const updateCCLine = () => updateFirstCCLine(false);
-
-    // ============================================================================
-    // ⭐ SNIPPET ENGINE
-    // ============================================================================
+    // ════════════════════════════════════════════════════════════════════════════
+    // ⭐ 11. KOORDINATEN-OBSERVER (live-Update bei Änderung)
+    // ════════════════════════════════════════════════════════════════════════════
 
     /**
-     * emoji       → Beschriftung des Schnellzugriff-Buttons
-     * shortcutKey → Alt+<Taste> (nur '1'–'9' und '0')
+     * Beobachtet #uxLatLon auf Änderungen und aktualisiert Note + Dropdown.
+     * Wird einmalig beim Script-Start gestartet.
+     */
+    function initCoordsObserver() {
+        cachedCoords = getCorrectedCoords();
+        debug("Initiale Koordinaten:", cachedCoords);
+
+        const coordsEl = DOM.corrected;
+        if (!coordsEl) return;
+
+        const observer = new MutationObserver(async () => {
+            const newCoords = getCorrectedCoords();
+            if (!newCoords || newCoords === cachedCoords) return;
+
+            debug("Koordinaten geändert:", newCoords);
+            cachedCoords = newCoords;
+
+            // Dropdown-Label aktualisieren (falls UI schon vorhanden)
+            const falschOpt = document.querySelector('#cc-snippets [data-vl-key="falsch"]');
+            if (falschOpt) {
+                const hint = falschOpt.dataset.shortcutKey ? `  [Alt+${falschOpt.dataset.shortcutKey}]` : "";
+                falschOpt.textContent = `❌ GEOCHECKER FALSCH (${newCoords})${hint}`;
+            }
+
+            // Warten, bis srOnlyCacheNote wirklich geladen ist (auf Mobile wichtig)
+            await waitForSavedNoteLoaded();
+            autoBeautifyOldNote();
+            flushNoteChanges();
+        });
+
+        observer.observe(coordsEl, {
+            childList:     true,
+            characterData: true,
+            subtree:       true,
+            attributes:    true,            // iOS/Android: italic-Klasse wird per Attribut gesetzt
+            attributeFilter: ['class']
+        });
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // ⭐ 12. SNIPPET-DEFINITIONEN
+    // ════════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Ein Snippet beschreibt einen einfügbaren Textbaustein.
+     *
+     * Felder:
+     *   label            – Anzeigename in Dropdown und Tooltip
+     *   value            – einzufügender Text (Platzhalter: __COORDS__)
+     *   emoji            – Emoji für Schnellzugriff-Button (nur wenn gesetzt)
+     *   shortcutKey      – Alt+<Taste> (nur '0'–'9')
+     *   autoSave         – sofort speichern nach Einfügen?
+     *   removeCC         – CC-Zeile (📌) am Anfang entfernen?
+     *   confirmResetCoords – nach Einfügen Reset-Coords-Dialog zeigen?
      */
     const SNIPPETS = [
         { label: '➕ Snippet', value: '' },
@@ -545,10 +555,8 @@
         {
             label: `❌ GEOCHECKER FALSCH (Koordinaten)`,
             emoji: '❌', shortcutKey: '3',
-            value: '❌ GEOCHECKER FALSCH (__COORDS__)', // Platzhalter → live ersetzt beim Auswählen
-            removeCC: true,
-            autoSave: true,
-            confirmResetCoords: true
+            value: '❌ GEOCHECKER FALSCH (__COORDS__)',
+            removeCC: true, autoSave: true, confirmResetCoords: true
         },
         { label: '❓ KEIN GEOCHECKER',              emoji: '❓', shortcutKey: '4', value: '❓ KEIN GEOCHECKER' },
         { label: '✉️ MESSAGE:',                     emoji: '✉️', shortcutKey: '5', value: '✉️ MESSAGE:' },
@@ -576,32 +584,79 @@
         { label: '🚗 Parken: ', emoji: '🚗', value: '🚗 Parken: ' }
     ];
 
+    // ════════════════════════════════════════════════════════════════════════════
+    // ⭐ 13. SNIPPET ENGINE
+    // ════════════════════════════════════════════════════════════════════════════
+
     /**
-     * Führt ein Snippet vollständig aus: Text auflösen, einfügen, ggf. speichern.
-     * Gemeinsame Logik für Dropdown, Schnellzugriff-Buttons und Tastenkürzel.
+     * Fügt Text in die Textarea ein. Strategie:
+     *  - GeoChecker-Snippets: an definierter Position (nach erstem Block) einfügen
+     *  - Note war geschlossen: am Ende anhängen
+     *  - Note war offen + Cursor aktiv: an Cursor-Position einfügen
      */
+    function insertSnippet(text, wasNoteClosed = true) {
+        const ta = DOM.note;
+        if (!ta) return;
+
+        const isGeoChecker = text.includes("GEOCHECKER OK") || text.includes("GEOCHECKER FALSCH");
+
+        // Fall A: GeoChecker-Snippet → nach erstem Block (= erste Leerzeile)
+        if (isGeoChecker) {
+            const lines = ta.value.split("\n");
+            let i = 0;
+            while (i < lines.length && lines[i].trim() !== "") i++;
+            const insertAt = i + 1;
+            lines.splice(insertAt, 0, "");
+            lines.splice(insertAt + 1, 0, text);
+            ta.value = lines.join("\n");
+            ta.dispatchEvent(new Event("input", { bubbles: true }));
+            ta.setSelectionRange(ta.value.length, ta.value.length);
+            return;
+        }
+
+        // Sicherstellen dass Textarea fokussiert ist
+        if (ta !== document.activeElement) ta.focus();
+
+        const cursorActive = ta === document.activeElement && typeof ta.selectionStart === "number";
+
+        // Fall B: Note war offen + Cursor aktiv → an Cursor-Position
+        if (cursorActive && !wasNoteClosed) {
+            debug("insertSnippet → an Cursor-Position");
+            const start  = ta.selectionStart;
+            const before = ta.value.slice(0, start);
+            const after  = ta.value.slice(start);
+            ta.value = before + "\n" + text + after;
+            ta.dispatchEvent(new Event("input", { bubbles: true }));
+            const newPos = before.length + 1 + text.length;
+            ta.setSelectionRange(newPos, newPos);
+            return;
+        }
+
+        // Fall C: Default → am Ende anhängen
+        debug("insertSnippet → am Ende");
+        const lines = ta.value.split("\n");
+        lines.push("", text);
+        ta.value = lines.join("\n");
+        ta.dispatchEvent(new Event("input", { bubbles: true }));
+        ta.setSelectionRange(ta.value.length, ta.value.length);
+    }
+
+    /** Führt ein Snippet vollständig aus: Text auflösen, einfügen, ggf. speichern. */
     async function applySnippet(sn) {
+        log("applySnippet:", sn.label);
         const noteWasClosed = activateNote();
-        console.log("[VL] applySnippet aufgerufen:", sn.label, "| removeCC:", sn.removeCC);
         if (!DOM.note) return;
 
-        // War die Note gerade geschlossen, warten bis die Textarea befüllt ist.
-        // Verhindert: doppeltes activateNote()-Toggle + leere-Textarea-Timing.
+        // Bei frisch geöffneter Note: auf Textarea-Content warten
         if (noteWasClosed) {
             await waitFor(
                 () => DOM.note?.value.trim(),
-                { interval: 80, timeoutMs: 1500 }
+                { interval: 80, timeoutMs: TIMINGS.waitForElementMed }
             );
         }
 
+        // __COORDS__-Platzhalter auflösen
         let text = sn.value;
-
-        // Datum anhängen
-        if (sn.autoDate) {
-            text = `${text} (${getTodayStr()})`;
-        }
-
-        // __COORDS__-Platzhalter live auflösen (mit Warte-Fallback für Mobile)
         if (text.includes("__COORDS__")) {
             const liveCoords = await waitForCoords();
             text = text.replace("__COORDS__", liveCoords ?? "?");
@@ -615,248 +670,129 @@
             }
         }
 
-        console.log("[VL] Vor insertSnippet - Note hat", DOM.note.value.split("\n").length, "Zeilen");
-        console.log("[VL] Zeilen:", DOM.note.value.split("\n").map((l, i) => `${i}: "${l.substring(0, 50)}"`));
         insertSnippet(text, noteWasClosed);
-        console.log("[VL] Nach insertSnippet - Note hat", DOM.note.value.split("\n").length, "Zeilen");
-        console.log("[VL] Zeilen:", DOM.note.value.split("\n").map((l, i) => `${i}: "${l.substring(0, 50)}"` ));
 
-        // Entferne CHALLENGE-Notification wenn "CHALLENGE ERFÜLLT" eingefügt wurde
-        if (text.includes("CHALLENGE ERFÜLLT")) {
-            const challengeNotif = document.getElementById("warn-CHALLENGE");
-            if (challengeNotif) {
-                challengeNotif.remove();
-                notified.delete("CHALLENGE");
-            }
-        }
-
-        // CC-Zeile löschen (nur wenn wirklich eine CC-Zeile!)
+        // Pfad 1: CC-Zeile entfernen (nur wenn vorhanden)
         if (sn.removeCC) {
-            console.log("[VL] removeCC=true, entferne CC-Zeile");
+            debug("Snippet: removeCC=true → CC-Zeile entfernen");
             const lines = DOM.note.value.split("\n");
             if (isCCLine(lines[0])) lines.shift();
             writeLines(lines, true);
             if (sn.confirmResetCoords) {
-                console.log("[VL] Snippet eingefügt, zeige Reset-Coords-Prompt");
+                debug("Snippet: Reset-Coords-Prompt anzeigen");
                 showResetCoordsPrompt();
             }
             return;
         }
 
-        console.log("[VL] removeCC=false/undefined, behalte CC-Zeile");
-
-        // Speichern?
+        // Pfad 2: AutoSave
         if (sn.autoSave) {
-            console.log("[VL] autoSave=true, speichere");
+            debug("Snippet: autoSave=true → speichern");
             writeLines(DOM.note.value.split("\n"), true);
             return;
         }
 
-        // Kein Speichern → Cursor sichtbar machen
-        console.log("[VL] Kein autoSave, nur Cursor-Focus");
+        // Pfad 3: Kein Save → nur Cursor setzen
+        debug("Snippet: kein autoSave, nur Cursor-Focus");
         DOM.note.focus();
         resizeNoteTextarea();
         scrollToNote();
     }
 
-    /** Fügt ein Snippet ein. */
-    const insertSnippet = (text, wasNoteClosed = true) => {
-        const ta = DOM.note;
-        if (!ta) return;
-
-        const isGeoCheckerSnippet =
-              text.includes("GEOCHECKER OK") ||
-              text.includes("GEOCHECKER FALSCH");
-
-        if (isGeoCheckerSnippet) {
-            const lines = ta.value.split("\n");
-
-            let i = 0;
-            while (i < lines.length && lines[i].trim() !== "") i++;
-
-            const insertAt = i + 1;
-
-            lines.splice(insertAt, 0, "");
-            lines.splice(insertAt + 1, 0, text);
-
-            ta.value = lines.join("\n");
-            ta.dispatchEvent(new Event("input", { bubbles: true }));
-
-            ta.setSelectionRange(ta.value.length, ta.value.length);
-            return;
-        }
-
-        // Stelle sicher, dass die Textarea fokussiert ist
-        if (ta !== document.activeElement) {
-            ta.focus();
-        }
-
-        const cursorActive =
-              ta === document.activeElement &&
-              typeof ta.selectionStart === "number";
-
-        console.log("[VL] insertSnippet Debug:", {
-            wasNoteClosed,
-            cursorActive,
-            activeElement: document.activeElement?.id,
-            selectionStart: ta.selectionStart,
-            shouldUseCursor: cursorActive && !wasNoteClosed
-        });
-
-        // Note war bereits offen: an Cursor-Position einfügen
-        if (cursorActive && !wasNoteClosed) {
-            console.log("[VL] Einfügung an Cursor-Position");
-            const start  = ta.selectionStart;
-            const before = ta.value.slice(0, start);
-            const after  = ta.value.slice(start);
-
-            ta.value = before + "\n" + text + after;
-            ta.dispatchEvent(new Event("input", { bubbles: true }));
-
-            const newPos = before.length + 1 + text.length;
-            ta.setSelectionRange(newPos, newPos);
-            return;
-        }
-
-        // Note war geschlossen oder Cursor nicht aktiv: am Ende anhängen
-        console.log("[VL] Einfügung am Ende");
-        const lines = ta.value.split("\n");
-        lines.push("", text);
-
-        ta.value = lines.join("\n");
-        ta.dispatchEvent(new Event("input", { bubbles: true }));
-
-        ta.setSelectionRange(ta.value.length, ta.value.length);
-    };
-
-    // ============================================================================
-    // ⭐ RESET-COORDS PROMPT
-    // - Abfrage nach GEOCHECKER FALSCH: korrigierte Koordinaten zurücksetzen?
-    // ============================================================================
+    // ════════════════════════════════════════════════════════════════════════════
+    // ⭐ 14. RESET-COORDS PROMPT
+    // ════════════════════════════════════════════════════════════════════════════
 
     /**
-     * Zeigt eine Ja/Nein-Abfrage an, ob die korrigierten Koordinaten
-     * zurückgesetzt werden sollen (nach Einfügen von GEOCHECKER FALSCH).
+     * Zeigt eine Ja/Nein-Abfrage zum Zurücksetzen der korrigierten Koordinaten.
+     * Wird nach "GEOCHECKER FALSCH" und bei Seitenstart (falls nötig) angezeigt.
      */
-    async function showResetCoordsPrompt() {
-        console.log("[VL] showResetCoordsPrompt aufgerufen");
+    function showResetCoordsPrompt() {
+        debug("showResetCoordsPrompt");
         document.getElementById("vl-reset-coords-prompt")?.remove();
 
-        // Notifications-Container über der Note verwenden
-        let container = document.getElementById("vl-notifications-container");
-        if (!container) {
-            const noteSection = document.querySelector(".Note.PersonalCacheNote");
-            if (!noteSection || !noteSection.parentElement) {
-                console.warn("[VL] Notifications-Container nicht gefunden");
-                return;
-            }
-            container = document.createElement("div");
-            container.id = "vl-notifications-container";
-            noteSection.parentElement.insertBefore(container, noteSection);
-        }
+        const container = ensureNotificationsContainer();
+        if (!container) return warn("Reset-Coords: Container nicht gefunden");
 
         const overlay = document.createElement("div");
         overlay.id = "vl-reset-coords-prompt";
-        console.debug("[VL] Reset-Coords-Dialog erstellt und ins DOM eingefügt");
-
-        const msg = document.createElement("span");
-        msg.textContent = "Korrigierte Koordinaten zurücksetzen?";
-        overlay.appendChild(msg);
-
-        const btnJa = document.createElement("button");
-        btnJa.type = "button";
-        btnJa.className = "vl-btn-ja";
-        btnJa.textContent = "Ja";
-
-        const btnNein = document.createElement("button");
-        btnNein.type = "button";
-        btnNein.className = "vl-btn-nein";
-        btnNein.textContent = "Nein";
-
-        overlay.appendChild(btnJa);
-        overlay.appendChild(btnNein);
+        overlay.innerHTML = `
+            <span>Korrigierte Koordinaten zurücksetzen?</span>
+            <button type="button" class="vl-btn-ja">Ja</button>
+            <button type="button" class="vl-btn-nein">Nein</button>`;
         container.appendChild(overlay);
 
-        // ── Nein ──────────────────────────────────────────────────────────────
-        btnNein.addEventListener("click", () => {
+        overlay.querySelector(".vl-btn-nein").addEventListener("click", () => {
             overlay.remove();
-            console.log("[VL] Reset-Coords: abgelehnt");
+            log("Reset-Coords: abgelehnt");
         });
 
-        // ── Ja ────────────────────────────────────────────────────────────────
-        btnJa.addEventListener("click", async () => {
+        overlay.querySelector(".vl-btn-ja").addEventListener("click", async () => {
             overlay.remove();
-            console.log("[VL] Reset-Coords: bestätigt");
+            log("Reset-Coords: bestätigt");
 
-            // Erste Zeile entfernen, falls sie noch korrigierte Koordinaten enthält
+            // CC-Zeile entfernen, falls noch vorhanden
             activateNote();
             const ta = DOM.note;
             if (ta) {
                 const lines = ta.value.split("\n");
                 if (isCCLine(lines[0])) {
-                    console.debug("[VL] Reset-Coords: CC-Zeile wird entfernt");
+                    debug("Reset-Coords: CC-Zeile entfernen");
                     lines.shift();
                     writeLines(lines, true);
-                    await new Promise(r => setTimeout(r, 400));
+                    await sleep(TIMINGS.saveSettleDelay);
                 }
             }
 
-            // Wiederherstellen-Button klicken (ggf. erst Koordinaten-Dialog öffnen)
+            // Wiederherstellen-Button klicken (evtl. erst Dialog öffnen)
             let restoreBtn = DOM.restoreBtn;
             if (!restoreBtn) {
-                console.debug("[VL] Reset-Coords: öffne Koordinaten-Dialog");
+                debug("Reset-Coords: öffne Koordinaten-Dialog");
                 DOM.latLonLink?.click();
                 restoreBtn = await waitFor(
                     () => DOM.restoreBtn,
-                    { interval: 100, timeoutMs: 5000 }
+                    { interval: 100, timeoutMs: TIMINGS.waitForElementLong }
                 );
             }
 
             if (restoreBtn) {
-                console.log("[VL] Reset-Coords: klicke Wiederherstellen");
+                log("Reset-Coords: Wiederherstellen geklickt");
                 restoreBtn.click();
             } else {
-                console.error("[VL] Reset-Coords: Wiederherstellen-Button nicht gefunden");
+                err("Reset-Coords: Wiederherstellen-Button nicht gefunden");
             }
         });
     }
 
-    // ============================================================================
-    // ⭐ NOTIFICATION ENGINE
-    // ============================================================================
+    // ════════════════════════════════════════════════════════════════════════════
+    // ⭐ 15. NOTIFICATION ENGINE
+    // ════════════════════════════════════════════════════════════════════════════
 
+    /** Set der bereits angezeigten Notification-Keys (Deduplizierung). */
     const notified = new Set();
 
-    const showNotification = (msg, id, checkerLink = null, def = null) => {
+    /**
+     * Erzeugt eine Notification oberhalb der Note.
+     * Mit checkerLink: Button "Öffnen" springt/öffnet Link; copyCoords: Coords in Clipboard.
+     */
+    function showNotification(msg, id, checkerLink = null, def = null) {
         if (id && document.getElementById(id)) return;
+        const container = ensureNotificationsContainer();
+        if (!container) return;
 
-        // Notifications-Container VOR der ganzen Note-Sektion
-        let container = document.getElementById("vl-notifications-container");
-        if (!container) {
-            // Finde die .Note.PersonalCacheNote div
-            const noteSection = document.querySelector(".Note.PersonalCacheNote");
-            if (!noteSection || !noteSection.parentElement) return;
-
-            container = document.createElement("div");
-            container.id = "vl-notifications-container";
-            noteSection.parentElement.insertBefore(container, noteSection);
-        }
-
+        const bgColor = def?.color ?? "#c62828";
         const div = document.createElement("div");
+        div.classList.add("checker-warning");
+        div.style.background = bgColor;
         div.textContent = msg;
         if (id) div.id = id;
 
-        const bgColor = def?.color ?? "#c62828";
-
-        div.classList.add("checker-warning");
-        div.style.background = bgColor;
-
         if (checkerLink) {
             const btn = document.createElement("button");
-            btn.textContent = "Öffnen";
-            btn.style.color = bgColor;
+            btn.textContent    = "Öffnen";
+            btn.style.color    = bgColor;
 
-            btn.addEventListener("click", (e) => {
+            btn.addEventListener("click", e => {
                 e.preventDefault();
                 e.stopPropagation();
                 e.stopImmediatePropagation();
@@ -869,12 +805,8 @@
                 if (checkerLink.startsWith("#")) {
                     const element = document.querySelector(checkerLink);
                     if (element) {
-                        // Nur fokussieren und auf Position scrollen, aber kein Click-Event
                         element.focus({ preventScroll: true });
-                        element.scrollIntoView({
-                            behavior: "smooth",
-                            block: "center"
-                        });
+                        element.scrollIntoView({ behavior: "smooth", block: "center" });
                     }
                 } else {
                     window.open(checkerLink, "_blank");
@@ -885,45 +817,56 @@
         }
 
         container.appendChild(div);
-    };
+    }
 
-    // ============================================================================
-    // ⭐ CHECKER ENGINE
-    // ============================================================================
+    // ════════════════════════════════════════════════════════════════════════════
+    // ⭐ 16. CHECKER ENGINE
+    // ════════════════════════════════════════════════════════════════════════════
 
+    /** Definitionen für Checker-Erkennung (Links + Notification-Konfiguration). */
     const CHECKER_DEFS = [
-        { key: "GEOCHECKER", msg: "⚠️ geochecker.com gefunden", match: h => h.includes("geochecker.com"), copyCoords: true,  color: "#1565c0" },
-        { key: "GEOCHECKER", msg: "⚠️ geocheck.org gefunden",   match: h => h.includes("geocheck.org"),   copyCoords: true,  color: "#1565c0" },
-        { key: "GEOCHECKER", msg: "⚠️ geotjek.dk gefunden",     match: h => h.includes("geotjek.dk"),     copyCoords: true,  color: "#1565c0" },
-        { key: "GC-APPS",    msg: "⚠️ GC-Apps Checker gefunden",match: h => h.includes("gc-apps.com") && h.includes("checker"), copyCoords: true, color: "#1565c0" },
-        { key: "CERTITUDE",  msg: "⚠️ Certitude Checker gefunden", match: h => h.includes("certitudes.org"), copyCoords: true, color: "#1565c0" },
-        { key: "CHALLENGE",  msg: "⚠️ Challenge-Link gefunden",    match: h => h.startsWith("https://project-gc.com/challenges/"), copyCoords: false, color: "#f9a825" },
-        { key: "JIGIDI",     msg: "🧩 Jigidi-Link gefunden",       match: h => h.includes("jigidi.com/"), copyCoords: false, color: "#f9a825" }
+        { key: "GEOCHECKER", msg: "⚠️ geochecker.com gefunden",      match: h => h.includes("geochecker.com"),                          copyCoords: true,  color: "#1565c0" },
+        { key: "GEOCHECKER", msg: "⚠️ geocheck.org gefunden",        match: h => h.includes("geocheck.org"),                            copyCoords: true,  color: "#1565c0" },
+        { key: "GEOCHECKER", msg: "⚠️ geotjek.dk gefunden",          match: h => h.includes("geotjek.dk"),                              copyCoords: true,  color: "#1565c0" },
+        { key: "GC-APPS",    msg: "⚠️ GC-Apps Checker gefunden",     match: h => h.includes("gc-apps.com") && h.includes("checker"),    copyCoords: true,  color: "#1565c0" },
+        { key: "CERTITUDE",  msg: "⚠️ Certitude Checker gefunden",   match: h => h.includes("certitudes.org"),                          copyCoords: true,  color: "#1565c0" },
+        { key: "CHALLENGE",  msg: "⚠️ Challenge-Link gefunden",      match: h => h.startsWith("https://project-gc.com/challenges/"),    copyCoords: false, color: "#f9a825" },
+        { key: "JIGIDI",     msg: "🧩 Jigidi-Link gefunden",         match: h => h.includes("jigidi.com/"),                             copyCoords: false, color: "#f9a825" }
     ];
 
+    /**
+     * Mapping: notified-Key → Note-Keyword, bei dem die Notification entfernt wird.
+     *
+     * HINWEIS: "CHALLENGE" ist hier absichtlich NICHT enthalten, damit die
+     * Challenge-Notification beim Einfügen von "CHALLENGE NICHT ERFÜLLT"
+     * NICHT verschwindet. (Key in scanCheckers ist "CHALLENGE", Lookup
+     * ergibt undefined → die Warnung bleibt stehen.)
+     */
     const CHECKER_KEYWORDS = {
-        "GEOCHECKER": "GEOCHECKER",
-        "GC-APPS":    "GC-APPS",
-        "CERTITUDE":  "CERTITUDE",
-        "INTERNAL":   "GEOCHECKER",
-        "CHALLENGE ERFÜLLT":  "CHALLENGE",
-        "JIGIDI":     "JIGIDI"
+        "GEOCHECKER":         "GEOCHECKER",
+        "GC-APPS":            "GC-APPS",
+        "CERTITUDE":          "CERTITUDE",
+        "INTERNAL":           "GEOCHECKER",
+        "CHALLENGE ERFÜLLT":  "CHALLENGE",  // absichtlich nicht unter "CHALLENGE"!
+        "JIGIDI":             "JIGIDI"
     };
 
-    async function scanCheckers() {
-        console.log('scanCheckers');
-        console.time('scanCheckers');
-
+    /**
+     * Scannt die Seite nach Checker-Links und zeigt Warnungen an.
+     * Fügt bei JIGIDI automatisch eine "UNSOLVED"-Zeile in die Note ein.
+     * Bei keinen Checkern: fügt "KEIN GEOCHECKER" ein.
+     */
+    function scanCheckers() {
+        log("scanCheckers");
         const saved = getWorkingNote().toUpperCase();
-
         const anchors = [...document.querySelectorAll("a[href]")]
             .map(a => ({ original: a.href, lower: a.href.toLowerCase() }));
 
         let foundAnyChecker = false;
 
+        // Integrierter Solution-Checker
         if (DOM.solutionCheckerLabel) {
             foundAnyChecker = true;
-
             if (!saved.includes("GEOCHECKER") && !notified.has("INTERNAL")) {
                 notified.add("INTERNAL");
                 showNotification(
@@ -935,30 +878,21 @@
             }
         }
 
+        // Externe Checker + Jigidi-Behandlung
         for (const def of CHECKER_DEFS) {
             const anchor = anchors.find(a => def.match(a.lower));
             if (!anchor) continue;
-            const href = anchor.original;
 
             if (def.key !== "JIGIDI") foundAnyChecker = true;
 
             if (!saved.includes(def.key) && !notified.has(def.key)) {
-                // Wenn es eine CHALLENGE Notification ist und Note hat "CHALLENGE ERFÜLLT", nicht zeigen
-                if (def.key === "CHALLENGE" && getWorkingNote().toUpperCase().includes("CHALLENGE ERFÜLLT")) {
-                    return; // Skip dieser Notification
-                }
-
                 notified.add(def.key);
-                showNotification(def.msg, "warn-" + def.key, href, def);
+                showNotification(def.msg, "warn-" + def.key, anchor.original, def);
             }
 
             if (def.key === "JIGIDI") {
                 const working = getWorkingNote().toUpperCase();
-                const hasAnyJigidi =
-                      working.includes("JIGIDI:") ||
-                      working.includes("🧩 JIGIDI:");
-
-                if (hasAnyJigidi) continue;
+                if (working.includes("JIGIDI:") || working.includes("🧩 JIGIDI:")) continue;
 
                 const coords = getCorrectedCoords();
                 if (!coords) continue;
@@ -966,36 +900,28 @@
                 let lines = getWorkingNote().split("\n");
                 lines = replaceCC(lines, coords);
                 lines = beautifyLines(lines);
-
-                if (lines.length > 0 && lines[lines.length - 1].trim() !== "") {
-                    lines.push("");
-                }
+                if (lines.length && lines[lines.length - 1].trim() !== "") lines.push("");
                 lines.push("🧩 JIGIDI: UNSOLVED");
-
                 setWorkingNote(lines.join("\n"));
             }
         }
 
         if (foundAnyChecker) return;
-
         if (saved.includes("KEIN GEOCHECKER")) return;
 
+        // Keine Checker gefunden → "KEIN GEOCHECKER" einfügen
         let lines = getWorkingNote().split("\n");
-
         const coords = getCorrectedCoords();
         if (coords) lines = replaceCC(lines, coords);
-
         lines = beautifyLines(lines);
 
-        let insertAt = 0;
         const ccIdx = lines.findIndex(isCCLine);
-        if (ccIdx !== -1) insertAt = ccIdx + 1;
+        let insertAt = ccIdx !== -1 ? ccIdx + 1 : 0;
 
         if (insertAt > 0 && lines[insertAt - 1].trim() !== "") {
             lines.splice(insertAt, 0, "");
             insertAt++;
         }
-
         lines.splice(insertAt, 0, "❓ KEIN GEOCHECKER");
 
         const hasAfter = lines.slice(insertAt + 1).some(l => l.trim() !== "");
@@ -1004,11 +930,13 @@
         }
 
         setWorkingNote(lines.join("\n"));
-
-        console.timeEnd('scanCheckers');
     }
 
-    const updateCheckerWarnings = () => {
+    /**
+     * Entfernt Notifications, wenn deren Keyword in der gespeicherten Note steht.
+     * Wird regelmäßig vom DOM-Monitor aufgerufen.
+     */
+    function updateCheckerWarnings() {
         const note  = getSavedNote().toUpperCase();
         const lines = note.split("\n").map(l => l.trim());
 
@@ -1016,16 +944,11 @@
             const keyword = CHECKER_KEYWORDS[key];
             if (!keyword) continue;
 
+            // JIGIDI: separat behandeln (nur entfernen wenn gelöst)
             if (key === "JIGIDI") {
-                const hasAnyJigidi =
-                      lines.some(l => l.startsWith("🧩 JIGIDI:")) ||
-                      lines.some(l => l.startsWith("JIGIDI:"));
-
-                const hasUnsolved =
-                      lines.includes("🧩 JIGIDI: UNSOLVED") ||
-                      lines.includes("JIGIDI: UNSOLVED");
-
-                if (hasAnyJigidi && !hasUnsolved) {
+                const hasJigidi   = lines.some(l => l.startsWith("🧩 JIGIDI:") || l.startsWith("JIGIDI:"));
+                const hasUnsolved = lines.includes("🧩 JIGIDI: UNSOLVED") || lines.includes("JIGIDI: UNSOLVED");
+                if (hasJigidi && !hasUnsolved) {
                     notified.delete(key);
                     document.getElementById("warn-" + key)?.remove();
                 }
@@ -1037,79 +960,70 @@
                 document.getElementById("warn-" + key)?.remove();
             }
         }
-    };
+    }
 
+    /**
+     * Behandelt das Ergebnis des integrierten Solution-Checkers.
+     * Schreibt automatisch "GEOCHECKER OK" oder "GEOCHECKER FALSCH" mit Datum in die Note.
+     */
     async function handleSolutionCheckerResult() {
         const el = await waitFor(() => {
             const e = DOM.solutionResponse;
-            return (e && e.textContent.trim()) ? e : null;
-        }, { interval: 1000, timeoutMs: 30000 });
+            return e?.textContent.trim() ? e : null;
+        }, { interval: 1000, timeoutMs: TIMINGS.waitForSolution });
 
         if (!el) return;
 
-        const text   = el.textContent.trim();
-        const coords = getCorrectedCoords();
-
+        const text = el.textContent.trim();
         let snippet = null;
+
         if (text.includes("Richtig! Die Koordinaten dieses Caches wurden aktualisiert")) {
             snippet = `✅ GEOCHECKER OK (${getTodayStr()})`;
         } else if (text.includes("Diese Koordinaten sind falsch")) {
+            const coords = getCorrectedCoords();
             if (!coords) return;
             snippet = `❌ GEOCHECKER FALSCH (${coords}) (${getTodayStr()})`;
         }
         if (!snippet) return;
 
         activateNote();
-
-        const ta = await waitFor(() => DOM.note, { interval: 80, timeoutMs: 5000 });
+        const ta = await waitFor(() => DOM.note, { interval: 80, timeoutMs: TIMINGS.waitForElementLong });
         if (!ta) return;
 
         let lines = ta.value.split("\n");
 
-        // Wenn "GEOCHECKER FALSCH", alte CC-Zeile am Anfang entfernen
+        // Bei "FALSCH": alte CC-Zeile am Anfang entfernen
         if (snippet.includes("GEOCHECKER FALSCH") && isCCLine(lines[0])) {
-            console.debug("[VL] handleSolutionCheckerResult: entferne alte CC-Zeile");
+            debug("SolutionChecker: entferne alte CC-Zeile");
             lines.shift();
         }
 
         lines = beautifyLines(lines);
 
+        // Nach erstem Block (= erste Leerzeile) einfügen
         let i = 0;
         while (i < lines.length && lines[i].trim() !== "") i++;
-
         const insertAt = i + 1;
-
         lines.splice(insertAt, 0, "");
         lines.splice(insertAt + 1, 0, snippet.trimStart());
 
         scrollToNote();
         writeLines(lines, true);
+        await sleep(TIMINGS.saveSettleDelay);
+        updateFirstCCLine(false);
 
-        // Warten bis writeLines fertig ist (noteWriteLocked wird auf false gesetzt)
-        await new Promise(r => setTimeout(r, 400));
-
-        updateCCLine();
-
-        // Zeige Reset-Coords-Prompt wenn "GEOCHECKER FALSCH" und korrigierte Coords vorhanden
-        console.log("[VL] handleSolutionCheckerResult Debug:", {
-            snippetContent: snippet.substring(0, 50),
-            hasFalsch: snippet.includes("GEOCHECKER FALSCH"),
-            cachedCoords,
-            shouldShow: snippet.includes("GEOCHECKER FALSCH") && cachedCoords
-        });
-
+        // Reset-Coords-Prompt bei FALSCH + vorhandenen korrigierten Coords
         if (snippet.includes("GEOCHECKER FALSCH") && cachedCoords) {
-            console.log("[VL] handleSolutionCheckerResult: zeige Reset-Coords-Prompt");
+            log("SolutionChecker: zeige Reset-Coords-Prompt");
             showResetCoordsPrompt();
         }
     }
 
-    // ============================================================================
-    // ⭐ UI ENGINE
-    // - Styles, CC/Undo-Button, Snippet-Dropdown, DOM-Monitor
-    // ============================================================================
+    // ════════════════════════════════════════════════════════════════════════════
+    // ⭐ 17. UI ENGINE (Styles + Elements)
+    // ════════════════════════════════════════════════════════════════════════════
 
-    /** Injiziert die gemeinsamen Styles einmalig. */
+    /** Injiziert die CSS-Styles einmalig in den <head>. */
     function injectStyles() {
         if (document.getElementById("vl-usernotes-styles")) return;
         const style = document.createElement("style");
@@ -1144,9 +1058,7 @@
                 flex-direction: column;
                 gap: 0;
             }
-            #vl-notifications-container:empty {
-                display: none;
-            }
+            #vl-notifications-container:empty { display: none; }
             #cc-ui-container {
                 display: flex;
                 align-items: center;
@@ -1169,9 +1081,7 @@
                 cursor: pointer;
                 transition: background 0.2s;
             }
-            #cc-btn[data-vl-mode="undo"] {
-                background: #01579b;
-            }
+            #cc-btn[data-vl-mode="undo"] { background: #01579b; }
             #cc-snippets {
                 padding: 6px;
                 border-radius: 4px;
@@ -1203,9 +1113,7 @@
                 justify-content: center;
                 min-height: 36px;
             }
-            #cc-snippet-btns button:hover {
-                background: #e0e0e0;
-            }
+            #cc-snippet-btns button:hover { background: #e0e0e0; }
             @media (max-width: 768px) {
                 #cc-snippet-btns button {
                     padding: 12px 14px;
@@ -1236,112 +1144,202 @@
                 margin-bottom: 4px;
                 background: #c62828;
             }
-            #vl-reset-coords-prompt span {
-                flex: 1;
-            }
-            #vl-reset-coords-prompt .vl-btn-ja {
-                padding: 2px 6px;
-                border: none;
-                border-radius: 3px;
-                cursor: pointer;
-                font-weight: bold;
-                background: white;
-                color: #c62828;
-                font-size: 11px;
-                flex-shrink: 0;
-            }
+            #vl-reset-coords-prompt span { flex: 1; }
+            #vl-reset-coords-prompt .vl-btn-ja,
             #vl-reset-coords-prompt .vl-btn-nein {
                 padding: 2px 6px;
-                border: 1px solid rgba(255,255,255,0.6);
                 border-radius: 3px;
                 cursor: pointer;
                 font-weight: bold;
-                background: transparent;
-                color: white;
                 font-size: 11px;
                 flex-shrink: 0;
+            }
+            #vl-reset-coords-prompt .vl-btn-ja {
+                border: none;
+                background: white;
+                color: #c62828;
+            }
+            #vl-reset-coords-prompt .vl-btn-nein {
+                border: 1px solid rgba(255,255,255,0.6);
+                background: transparent;
+                color: white;
             }
         `;
         document.head.appendChild(style);
     }
 
-    /** Mobile: Verschiebt den Viewport sodass initial nur der Hauptbereich sichtbar ist. */
+    /** Aktiviert Mobile-Zoom auf Android (nur dort nötig). */
     function initMobileViewport() {
-        // Nur auf Android aktivieren
-        const ua = navigator.userAgent;
-        const isAndroid = /Android/.test(ua);
+        log("initMobileViewport: isAndroid =", DEVICE.isAndroid);
+        if (!DEVICE.isAndroid) return;
 
-        console.log("[VL] initMobileViewport: isAndroid =", isAndroid);
-
-        if (!isAndroid) {
-            return;
-        }
-
-        console.log("[VL] Mobile-Zoom für Android aktiviert");
-
-        // Viewport Meta-Tag anpassen
         const viewport = document.querySelector('meta[name="viewport"]');
-        if (viewport) {
-            viewport.setAttribute("content", "width=device-width, initial-scale=1.0, user-scalable=yes");
-        }
+        if (viewport) viewport.setAttribute("content", "width=device-width, initial-scale=1.0, user-scalable=yes");
 
-        // Nach Verzögerung Zoom anwenden
         setTimeout(() => {
-            // Finde die Note-Sektion (mit den Buttons und Textarea)
-            const noteSection = document.querySelector(".Note.PersonalCacheNote");
-            if (!noteSection) {
-                console.warn("[VL] Note-Section nicht gefunden");
-                return;
-            }
+            const noteSection = DOM.noteSection;
+            if (!noteSection) return warn("initMobileViewport: Note-Section nicht gefunden");
 
-            // Berechne Zoom-Faktor basierend auf Note-Sektion-Breite
-            // (nicht auf Hauptbereich - das ist zu aggressiv)
-            const noteSectionWidth = noteSection.offsetWidth;
-            const viewportWidth = window.innerWidth;
-            let zoomFactor = viewportWidth / noteSectionWidth;
+            const zoomFactor = (window.innerWidth / noteSection.offsetWidth) * 0.97;
+            log(`Android Zoom: ${zoomFactor.toFixed(3)} (noteSection=${noteSection.offsetWidth}px, viewport=${window.innerWidth}px)`);
 
-            // 3% weniger Zoom für perfektes Gleichgewicht
-            zoomFactor = zoomFactor * 0.97;
-
-            console.log(`[VL] Android Zoom: ${zoomFactor.toFixed(3)} (noteSection=${noteSectionWidth}px, viewport=${viewportWidth}px)`);
-
-            // Wende Zoom an (wie Finger-Zoom)
             document.body.style.zoom = zoomFactor;
             document.documentElement.style.zoom = zoomFactor;
-
-            // Scrolle nach oben-links
             window.scrollTo(0, 0);
-
-        }, 100);
+        }, TIMINGS.viewportZoomDelay);
     }
 
     /**
-     * Aktualisiert den CC/Undo-Button je nach aktuellem Noten-Zustand.
+     * Aktualisiert den CC/Undo-Button je nach Noten-Zustand.
      * - Grün "📝"  → Note entspricht dem ursprünglichen Ladestand
-     * - Blau "↩"   → Note wurde seither verändert (Snippet, manuelle Eingabe)
+     * - Blau "↩"   → Note wurde seither verändert
      */
     function updateCCBtn() {
         const btn = document.getElementById("cc-btn");
         if (!btn || originalNoteText === null) return;
 
         const currentText = DOM.note?.value ?? getSavedNote();
-        const noteChanged = currentText.trim() !== originalNoteText.trim();
+        const changed = currentText.trim() !== originalNoteText.trim();
 
-        if (noteChanged && btn.dataset.vlMode !== "undo") {
+        if (changed && btn.dataset.vlMode !== "undo") {
             btn.dataset.vlMode = "undo";
             btn.textContent    = "↩";
             btn.title          = "Ursprüngliche Note am Ende einfügen (ohne Speichern)";
-        } else if (!noteChanged && btn.dataset.vlMode !== "cc") {
+        } else if (!changed && btn.dataset.vlMode !== "cc") {
             btn.dataset.vlMode = "cc";
             btn.title          = "";
             btn.textContent    = "📝";
         }
     }
 
-    /** Baut CC/Undo-Button, Snippet-Dropdown und Versionsanzeige ein. */
-    const addUI = () => {
-        if (document.getElementById("cc-ui-container")) return;
+    /** Erzeugt einen Emoji-Container mit passendem Scale-Fix (Emoji oder Buchstaben). */
+    function buildEmojiContainer(emoji) {
+        const el = document.createElement("span");
+        el.style.cssText = "display:inline-flex;align-items:center;justify-content:center;height:20px;width:20px;line-height:1";
+        el.textContent = emoji;
 
+        const isTextLabel = /^[A-Za-z]+$/.test(emoji);
+        if (isTextLabel) {
+            el.style.fontSize = "11px";
+        } else if (SMALL_EMOJIS.has(emoji)) {
+            el.style.fontSize = "16px";
+            el.style.transform = `scale(${DEVICE.smallEmojiScale})`;
+        } else {
+            el.style.fontSize = "20px";
+        }
+        return el;
+    }
+
+    /** Baut einen einzelnen Schnellzugriff-Button für ein Snippet. */
+    function buildSnippetButton(sn) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.appendChild(buildEmojiContainer(sn.emoji));
+
+        if (sn.shortcutKey) {
+            const badge = document.createElement("span");
+            badge.className   = "vl-shortcut-badge";
+            badge.textContent = sn.shortcutKey;
+            b.appendChild(badge);
+        }
+
+        const hint = sn.shortcutKey ? ` [Alt+${sn.shortcutKey}]` : "";
+        b.title = sn.label + hint;
+
+        b.addEventListener("click", () => applySnippet(sn));
+        return b;
+    }
+
+    /** Baut das Snippet-Dropdown. */
+    function buildSnippetSelect() {
+        const select = document.createElement("select");
+        select.id = "cc-snippets";
+
+        SNIPPETS.forEach(sn => {
+            const opt = document.createElement("option");
+            opt.textContent = sn.shortcutKey
+                ? `${sn.label}  [Alt+${sn.shortcutKey}]`
+                : sn.label;
+            opt.value = sn.value;
+
+            if (sn.label === "➕ Snippet") {
+                opt.disabled = true;
+                opt.selected = true;
+            }
+            if (sn.value.includes("__COORDS__")) opt.dataset.vlKey = "falsch";
+            if (sn.shortcutKey)                  opt.dataset.shortcutKey = sn.shortcutKey;
+
+            select.appendChild(opt);
+        });
+
+        select.addEventListener("change", async e => {
+            const val = e.target.value;
+            if (!val) return;
+            const sn = SNIPPETS.find(s => s.value === val);
+            if (sn) await applySnippet(sn);
+            select.selectedIndex = 0;
+        });
+
+        return select;
+    }
+
+    /** Baut den CC/Undo-Button mit Toggle-Logik. */
+    function buildCCButton() {
+        const btn = document.createElement("button");
+        btn.id             = "cc-btn";
+        btn.type           = "button";
+        btn.dataset.vlMode = "cc";
+        btn.textContent    = "📝";
+
+        btn.addEventListener("click", async e => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            // Undo-Modus: ursprüngliche Note anhängen
+            if (btn.dataset.vlMode === "undo") {
+                activateNote();
+                const ta = DOM.note;
+                if (!ta || originalNoteText === null) return;
+
+                const lines = ta.value.split("\n");
+                if (lines[lines.length - 1].trim() !== "") lines.push("");
+                lines.push("🗑️ OLD NOTE:");
+                originalNoteText.split("\n").forEach(l => lines.push(l));
+
+                ta.value = lines.join("\n");
+                ta.dispatchEvent(new Event("input", { bubbles: true }));
+                ta.setSelectionRange(ta.value.length, ta.value.length);
+
+                resizeNoteTextarea();
+                scrollToNote();
+                log("Undo: ursprüngliche Note angehängt");
+                return;
+            }
+
+            // CC-Modus: Koordinaten einfügen
+            if (!cachedCoords) {
+                showNotification("Keine korrigierten Koordinaten gefunden.");
+                return;
+            }
+
+            activateNote();
+            btn.textContent = "✓"; // kurze Bestätigung
+
+            await waitFor(
+                () => { const t = DOM.note; return t?.value.trim() ? t : null; },
+                { interval: 80, timeoutMs: 1680 }
+            );
+
+            applyCC(cachedCoords);
+            setTimeout(updateCCBtn, 1200);
+        });
+
+        return btn;
+    }
+
+    /** Baut die komplette UI: Version, CC-Button, Dropdown, Schnellzugriff. */
+    function addUI() {
+        if (document.getElementById("cc-ui-container")) return;
         const noteWrapper = document.querySelector(".PersonalCacheNote");
         if (!noteWrapper) return;
 
@@ -1353,301 +1351,138 @@
 
         const container = document.createElement("div");
         container.id = "cc-ui-container";
-
-        // CC / Undo-Button
-        const btn = document.createElement("button");
-        btn.id             = "cc-btn";
-        btn.type           = "button";
-        btn.dataset.vlMode = "cc";
-        btn.textContent    = "📝";
-
-        btn.addEventListener("click", async e => {
-            e.preventDefault();
-            e.stopPropagation();
-
-            // ── Undo-Modus ──────────────────────────────────────────────────────
-            if (btn.dataset.vlMode === "undo") {
-                activateNote();
-                const ta = DOM.note;
-                if (!ta || originalNoteText === null) return;
-
-                const lines = ta.value.split("\n");
-
-                // Leerzeile + Trennzeile + ursprüngliche Note anhängen
-                if (lines[lines.length - 1].trim() !== "") lines.push("");
-                lines.push("🗑️ OLD NOTE:");
-                originalNoteText.split("\n").forEach(l => lines.push(l));
-
-                ta.value = lines.join("\n");
-                ta.dispatchEvent(new Event("input", { bubbles: true }));
-                ta.setSelectionRange(ta.value.length, ta.value.length);
-
-                resizeNoteTextarea();
-                scrollToNote();
-                console.log("[VL] Undo: ursprüngliche Note angehängt");
-                return;
-            }
-
-            // ── CC-Modus ─────────────────────────────────────────────────────────
-            if (!cachedCoords) {
-                showNotification("Keine korrigierten Koordinaten gefunden.");
-                return;
-            }
-
-            activateNote();
-            btn.textContent = "✓"; // kurze Bestätigung
-
-            await waitFor(
-                () => { const t = DOM.note; return t && t.value.trim() ? t : null; },
-                { interval: 80, timeoutMs: 1680 }
-            );
-
-            applyCC(cachedCoords);
-            setTimeout(() => {
-                updateCCBtn(); // korrekten Modus nach CC-Operation setzen
-            }, 1200);
-        });
-
-        // Snippet-Dropdown
-        const select = document.createElement("select");
-        select.id = "cc-snippets";
-
-        SNIPPETS.forEach(sn => {
-            const opt = document.createElement("option");
-
-            // Shortcut-Hinweis am Ende des Labels (Option-Elemente unterstützen
-            // kein CSS-Styling, daher keine echte Rechtsausrichtung möglich)
-            opt.textContent = sn.shortcutKey
-                ? `${sn.label}  [Alt+${sn.shortcutKey}]`
-                : sn.label;
-            opt.value = sn.value;
-
-            if (sn.label === "➕ Snippet") {
-                opt.disabled = true;
-                opt.selected = true;
-            }
-
-            if (sn.value.includes("__COORDS__")) {
-                opt.dataset.vlKey = "falsch";
-            }
-
-            // Shortcut-Ziffer auf der Option speichern → für dynamische Updates
-            if (sn.shortcutKey) opt.dataset.shortcutKey = sn.shortcutKey;
-
-            select.appendChild(opt);
-        });
-
-        select.addEventListener("change", async e => {
-            const val = e.target.value;
-            if (!val) return;
-            const sn = SNIPPETS.find(s => s.value === val);
-            if (!sn) return;
-            await applySnippet(sn);
-            select.selectedIndex = 0;
-        });
+        container.appendChild(buildCCButton());
+        container.appendChild(buildSnippetSelect());
 
         noteWrapper.prepend(container);
         noteWrapper.prepend(versionDiv);
 
-        container.appendChild(btn);
-        container.appendChild(select);
-
-        // Schnellzugriff-Button-Leiste (eine Zeile pro Snippet mit emoji)
         const btnBar = document.createElement("div");
         btnBar.id = "cc-snippet-btns";
-
-        SNIPPETS.filter(sn => sn.emoji).forEach(sn => {
-            const b = document.createElement("button");
-            b.type = "button";
-
-            // Device-spezifischer Scale-Faktor für problematische Emojis
-            const ua = navigator.userAgent;
-            const isSafari = ua.includes('Safari') && !ua.includes('Chrome');
-            const isIPad = ua.includes('iPad') || (ua.includes('Mac OS X') && navigator.maxTouchPoints >= 5);
-            const isIPadSafari = isSafari && isIPad;
-
-            const smallEmojisScaleFactor = isIPadSafari ? 1.1 : 1.25;
-
-            // Native Emojis als Text mit fester Höhe
-            const emojiContainer = document.createElement("span");
-            emojiContainer.style.display = "inline-flex";
-            emojiContainer.style.alignItems = "center";
-            emojiContainer.style.justifyContent = "center";
-            emojiContainer.style.height = "20px";
-            emojiContainer.style.width = "20px";
-            emojiContainer.style.lineHeight = "1";
-            emojiContainer.textContent = sn.emoji;
-
-            // Text-Labels (nur reine Buchstaben wie WP, ST)
-            const isTextLabel = /^[A-Za-z]+$/.test(sn.emoji);
-
-            if (isTextLabel) {
-                emojiContainer.style.fontSize = "11px";
-            } else {
-                // Manche Emojis (text-style) werden vom Browser kleiner gerendert.
-                // Vergrößere sie per transform: scale() - device-spezifisch
-                const smallEmojis = ["✳️", "✉️", "⚠️"];
-                if (smallEmojis.includes(sn.emoji)) {
-                    emojiContainer.style.fontSize = "16px";
-                    emojiContainer.style.transform = `scale(${smallEmojisScaleFactor})`;
-                } else {
-                    emojiContainer.style.fontSize = "20px";
-                }
-            }
-
-            b.appendChild(emojiContainer);
-
-            // Badge mit Shortcut-Ziffer (unten rechts)
-            if (sn.shortcutKey) {
-                const badge = document.createElement("span");
-                badge.className   = "vl-shortcut-badge";
-                badge.textContent = sn.shortcutKey;
-                b.appendChild(badge);
-            }
-
-            // Tooltip: voller Label + Shortcut-Hinweis
-            const hint = sn.shortcutKey ? ` [Alt+${sn.shortcutKey}]` : "";
-            b.title = sn.label + hint;
-
-            b.addEventListener("click", async () => {
-                await applySnippet(sn);
-            });
-
-            btnBar.appendChild(b);
-        });
-
+        SNIPPETS.filter(sn => sn.emoji).forEach(sn => btnBar.appendChild(buildSnippetButton(sn)));
         noteWrapper.insertBefore(btnBar, container.nextSibling);
 
-        // initialen Button-Zustand setzen
         updateCCBtn();
+        debug("UI hinzugefügt");
+    }
 
-        console.debug("[VL] UI hinzugefügt");
-    };
-
-    /** Startet den DOM-Monitor (Checker-Warnungen + Button-Zustand). */
-    const startDomMonitor = () => {
+    /** Startet den regelmäßigen DOM-Monitor (Checker-Warnungen + CC-Button). */
+    function startDomMonitor() {
         setInterval(() => {
             updateCheckerWarnings();
             updateCCBtn();
-        }, 500);
-        console.debug("[VL] DOM-Monitor gestartet");
-    };
+        }, TIMINGS.domMonitorInterval);
+        debug("DOM-Monitor gestartet");
+    }
 
-    // ============================================================================
-    // ⭐ START PIPELINE
-    // ============================================================================
+    // ════════════════════════════════════════════════════════════════════════════
+    // ⭐ 18. KEYBOARD SHORTCUTS
+    // ════════════════════════════════════════════════════════════════════════════
 
-    window.addEventListener("load", () => {
-        // Mobile-Viewport sofort anpassen, BEVOR andere Operationen starten
-        // (verhindert Ruckeln beim initialen Rendering)
-        initMobileViewport();
-
-        setTimeout(async () => {
-            await waitForSavedNoteLoaded();
-
-            // Sicherungskopie VOR allen Script-Änderungen (für Undo)
-            originalNoteText = getSavedNote();
-            console.log("[VL] originalNoteText gesichert, Länge:", originalNoteText.length);
-
-            await autoBeautifyOldNote();
-            syncCCLineWithCorrectedCoords();
-            await scanCheckers();
-            await flushNoteChanges();
-
-            addUI();
-
-            // Beim Laden: Abfrage zeigen, wenn korrigierte Koordinaten vorhanden,
-            // aber die Note bereits "GEOCHECKER FALSCH" enthält
-            if (cachedCoords && originalNoteText?.toUpperCase().includes("GEOCHECKER FALSCH")) {
-                console.log("[VL] Startup: Zeige Reset-Coords-Prompt (korrigierte Coords + GEOCHECKER FALSCH in Note)");
-                showResetCoordsPrompt();
-            } else {
-                console.debug("[VL] Startup: Reset-Coords-Prompt nicht nötig", {
-                    hasCachedCoords: !!cachedCoords,
-                    hasGeoCheckerFalsch: originalNoteText?.toUpperCase().includes("GEOCHECKER FALSCH")
-                });
-            }
-
-            startDomMonitor();
-
-            const checkerBtn = document.getElementById("CheckerButton");
-            if (checkerBtn) {
-                checkerBtn.addEventListener("click", () => {
-                    console.debug("[VL] Solution: CheckerButton geklickt");
-                    setTimeout(handleSolutionCheckerResult, 500);
-                });
-            }
-        }, 500);
-    });
-
-    /** Event-Listener für Tastenkürzel. */
-    document.addEventListener("keydown", async e => {
-
-        // ESC → Note schließen ohne Speichern (kein Modifier nötig)
+    /** Tastatur-Event-Handler für alle Shortcuts. */
+    async function handleKeydown(e) {
+        // ESC → Note schließen (kein Modifier)
         if (e.key === "Escape" && !e.ctrlKey && !e.shiftKey && !e.altKey) {
             if (isNoteOpen()) {
                 e.preventDefault();
                 cancelNote();
-                return;
             }
+            return;
         }
 
         // Alt+Zahl → Snippet per Tastenkürzel
-        // e.code ('Digit0'–'Digit9', 'Numpad0'–'Numpad9') ist layout-unabhängig.
         if (e.altKey && !e.ctrlKey && !e.shiftKey) {
-            const digitMatch = e.code?.match(/^(?:Digit|Numpad)(\d)$/); // Digit* + Numpad*
+            const digitMatch = e.code?.match(/^(?:Digit|Numpad)(\d)$/);
             if (digitMatch) {
                 const sn = SNIPPETS.find(s => s.shortcutKey === digitMatch[1]);
                 if (sn) {
                     e.preventDefault();
-                    console.log(`[VL] Shortcut: Alt+${digitMatch[1]} → ${sn.label}`);
+                    log(`Shortcut Alt+${digitMatch[1]} → ${sn.label}`);
                     await applySnippet(sn);
-                    return;
                 }
             }
+            return;
         }
 
-        // Ab hier: nur STRG-Kombinationen (kein Shift, kein Alt)
+        // Ab hier: nur reine Ctrl-Kombinationen
         if (!e.ctrlKey || e.shiftKey || e.altKey) return;
-
         const key = e.key.toLowerCase();
 
-        // STRG + S → Note speichern
+        // Ctrl+S → speichern
         if (key === "s") {
             e.preventDefault();
-
-            if (!isNoteOpen()) {
-                console.warn("[VL] STRG+S ignoriert: Note ist nicht offen");
-                return;
-            }
-            if (!DOM.note) {
-                console.warn("[VL] STRG+S ignoriert: Textarea nicht vorhanden");
-                return;
-            }
-
-            console.log("[VL] Shortcut: STRG+S → Note speichern");
+            if (!isNoteOpen()) return warn("Ctrl+S ignoriert: Note nicht offen");
+            if (!DOM.note)     return warn("Ctrl+S ignoriert: Textarea nicht vorhanden");
+            log("Shortcut Ctrl+S → speichern");
             writeLines(DOM.note.value.split("\n"), true);
             return;
         }
 
-        // STRG + O → Note öffnen
+        // Ctrl+O → Note öffnen
         if (key === "o") {
             e.preventDefault();
-            console.log("[VL] Shortcut: STRG+O → Note öffnen");
+            log("Shortcut Ctrl+O → Note öffnen");
             activateNote();
             scrollToNote();
             return;
         }
 
-        // STRG + Z → Undo (ursprüngliche Note anhängen, nur wenn ↩-Modus aktiv)
+        // Ctrl+Z → Undo (nur im ↩-Modus)
         if (key === "z") {
             const ccBtn = document.getElementById("cc-btn");
             if (ccBtn?.dataset.vlMode === "undo") {
                 e.preventDefault();
-                console.log("[VL] Shortcut: STRG+Z → Undo");
+                log("Shortcut Ctrl+Z → Undo");
                 ccBtn.click();
             }
         }
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // ⭐ 19. START PIPELINE
+    // ════════════════════════════════════════════════════════════════════════════
+
+    /** Einmalige Start-Sequenz nach Page-Load. */
+    async function runStartupPipeline() {
+        await waitForSavedNoteLoaded();
+
+        // Original-Text für Undo sichern
+        originalNoteText = getSavedNote();
+        log("originalNoteText gesichert, Länge:", originalNoteText.length);
+
+        autoBeautifyOldNote();
+        updateFirstCCLine(true);      // syncCCLineWithCorrectedCoords
+        scanCheckers();
+        flushNoteChanges();
+
+        addUI();
+
+        // Reset-Coords-Prompt anzeigen, wenn Koordinaten korrigiert sind
+        // UND die Note bereits "GEOCHECKER FALSCH" enthält
+        if (cachedCoords && originalNoteText?.toUpperCase().includes("GEOCHECKER FALSCH")) {
+            log("Startup: Reset-Coords-Prompt anzeigen");
+            showResetCoordsPrompt();
+        }
+
+        startDomMonitor();
+
+        // Listener für den integrierten Solution-Checker
+        const checkerBtn = document.getElementById("CheckerButton");
+        if (checkerBtn) {
+            checkerBtn.addEventListener("click", () => {
+                debug("SolutionChecker: CheckerButton geklickt");
+                setTimeout(handleSolutionCheckerResult, TIMINGS.checkerBtnDelay);
+            });
+        }
+    }
+
+    window.addEventListener("load", () => {
+        // Mobile-Viewport sofort anpassen (verhindert Ruckeln)
+        initMobileViewport();
+        initCoordsObserver();
+        setTimeout(runStartupPipeline, TIMINGS.startupDelay);
     });
+
+    document.addEventListener("keydown", handleKeydown);
 
 })();
