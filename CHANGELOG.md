@@ -1,5 +1,10 @@
 # Changelog
 
+## [6.0] - 2026-04-18
+
+### Added
+- Facebook-Suche integriert
+
 ## [5.2] - 2026-04-18
 
 ### Fixed

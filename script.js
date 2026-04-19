@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      5.2
+// @version      6.0
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -27,6 +27,24 @@
         const code = el?.textContent?.trim() ?? null;
         return code;
     })();
+
+    /** Facebook-Gruppen-IDs für die GC-Suche. */
+    const FB_GROUP_IDS = [
+        "2978857879030956",  // Geo-jigidi-solve n' share
+        "678851082133537",   // Lösungshilfen Mystery
+        "504335432942838",   // Geocaching Mystery-Lösungs-Gruppe
+        "721877714491241",   // Geocaching - Tipps und Tricks zu Mystery-Caches
+        "366762873437664",   // Geocaching - Verrückte Verstecke - Hilfe bei Mysteries
+        "312585526091341",   // Geocaching Puzzle Help Club
+        "123013514431454",   // Geocaching
+        "258731947489712",   // Geocaching Community Deutschland
+        "762571793805193",   // Geocaching Niedersachsen
+        "327295933132",      // Geocaching Hamburg / Schleswig Holstein / Niedersachsen
+        "315558138508218"    // Geocaching Oldenburg
+    ];
+
+    /** Facebook-Logo als SVG-Daten-URI (blaues "f" auf Kreis). */
+    const FB_LOGO = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTIiIGZpbGw9IiMxODc3RjIiLz48cGF0aCBkPSJNMTYuNSA3LjVoLTJjLS44IDAtMSAuMy0xIDFWMTBoM2wtLjQgM0gxMy41djhIMTB2LThIOC41di0zSDEwVjguM0MxMCA2IDExLjUgNC41IDE0IDQuNWMxLjEgMCAyLjUuMiAyLjUuMlY3LjV6IiBmaWxsPSJ3aGl0ZSIvPjwvc3ZnPg==";
 
     /** Zentrale Timing-Werte (ms). */
     const TIMINGS = {
@@ -627,10 +645,15 @@
         },
         { label: '🔒 CODE:',    emoji: '🔒', value: '🔒 CODE: ' },
         { label: '👉 HINT:',    emoji: '👉', value: '👉 HINT: ' },
-        { label: '🚩 WP',       emoji: 'WP', value: '🚩 WP' },
-        { label: '🚩 STAGE',    emoji: 'ST', value: '🚩 STAGE' },
+        { label: '🚩 WP',       emoji: '🚩', value: '🚩 WP' },
         { label: '🚗 Parken: ', emoji: '🚗', value: '🚗 Parken: ' },
         { label: '➡️ ',               emoji: '➡️', value: '➡️', noBlankBefore: true },
+        {
+            label: 'Facebook-Suche',
+            image: FB_LOGO,
+            isFbSearch: true,
+            value: ''
+        },
         {
             label: '🔍 PUZZLE-COORDS (Desktop)',
             emoji: '🔍',
@@ -761,6 +784,20 @@
             const url = sn.linkUrl.replace("__GCCODE__", gcCode);
             log(`Link geöffnet: ${sn.label}`);
             window.open(url, "_blank");
+            return;
+        }
+
+        // Facebook-Suche: pro Gruppe einen Tab öffnen
+        if (sn.isFbSearch) {
+            if (!gcCode) {
+                showNotification("GC-Code nicht gefunden.");
+                return;
+            }
+            log(`Facebook-Suche: ${FB_GROUP_IDS.length} Gruppen`);
+            FB_GROUP_IDS.forEach(groupId => {
+                const url = `https://www.facebook.com/groups/${groupId}/search/?q=${gcCode}`;
+                window.open(url, "_blank");
+            });
             return;
         }
 
@@ -1443,7 +1480,17 @@
     function buildSnippetButton(sn) {
         const b = document.createElement("button");
         b.type = "button";
-        b.appendChild(buildEmojiContainer(sn.emoji));
+
+        if (sn.image) {
+            // Bild-Button (z.B. Facebook-Logo)
+            const img = document.createElement("img");
+            img.src = sn.image;
+            img.style.cssText = "width:20px;height:20px;object-fit:contain;display:block;";
+            img.alt = sn.label;
+            b.appendChild(img);
+        } else {
+            b.appendChild(buildEmojiContainer(sn.emoji));
+        }
 
         if (sn.shortcutKey) {
             const badge = document.createElement("span");
@@ -1571,13 +1618,13 @@
         const btnBar = document.createElement("div");
         btnBar.id = "cc-snippet-btns";
 
-        // Normale Buttons
-        const normalSnippets = SNIPPETS.filter(sn => sn.emoji && !sn.isLink);
+        // Normale Buttons (emoji, kein Link, kein FB)
+        const normalSnippets = SNIPPETS.filter(sn => (sn.emoji || sn.image) && !sn.isLink && !sn.isFbSearch);
         normalSnippets.forEach(sn => btnBar.appendChild(buildSnippetButton(sn)));
 
-        // Link-Buttons (direkt nach normalen Buttons, neue Zeile)
-        const linkSnippets = SNIPPETS.filter(sn => sn.isLink);
-        linkSnippets.forEach(sn => btnBar.appendChild(buildSnippetButton(sn)));
+        // FB-Button + Link-Buttons (neue Zeile)
+        const extraSnippets = SNIPPETS.filter(sn => sn.isFbSearch || sn.isLink);
+        extraSnippets.forEach(sn => btnBar.appendChild(buildSnippetButton(sn)));
 
         noteWrapper.insertBefore(btnBar, container.nextSibling);
 
