@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      6.5
+// @version      6.6
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -1019,12 +1019,14 @@
     ];
 
     /**
-     * Mapping: notified-Key → Note-Keyword, bei dem die Notification entfernt wird.
+     * Mapping: Note-Keyword → Checker-Key.
+     * Doppelte Verwendung:
+     *  1. updateCheckerWarnings: Notification entfernen wenn Note-Keyword nach Speichern vorhanden
+     *  2. scanCheckers: Notification beim Laden unterdrücken (Reverse-Lookup auf Checker-Key)
      *
-     * HINWEIS: "CHALLENGE" ist hier absichtlich NICHT enthalten, damit die
-     * Challenge-Notification beim Einfügen von "CHALLENGE NICHT ERFÜLLT"
-     * NICHT verschwindet. (Key in scanCheckers ist "CHALLENGE", Lookup
-     * ergibt undefined → die Warnung bleibt stehen.)
+     * CHALLENGE ERFÜLLT → CHALLENGE (nicht "CHALLENGE" direkt!):
+     * Damit bleibt die Notification bei "CHALLENGE NICHT ERFÜLLT" bestehen,
+     * weil "CHALLENGE NICHT ERFÜLLT" ≠ "CHALLENGE ERFÜLLT".
      */
     const CHECKER_KEYWORDS = {
         "GEOCHECKER":         "GEOCHECKER",
@@ -1071,7 +1073,16 @@
 
             if (def.key !== "JIGIDI") foundAnyChecker = true;
 
-            if (!saved.includes(def.key) && !notified.has(def.key)) {
+            // Notification unterdrücken wenn die Note bereits das passende Ergebnis enthält.
+            // Reverse-Lookup in CHECKER_KEYWORDS: für def.key alle Note-Keywords finden,
+            // die diesen Checker als "erledigt" markieren.
+            // Beispiel: CHALLENGE → ["CHALLENGE ERFÜLLT"] (nicht "CHALLENGE NICHT ERFÜLLT")
+            const suppressKeywords = Object.entries(CHECKER_KEYWORDS)
+                .filter(([, v]) => v === def.key)
+                .map(([k]) => k);
+            const alreadyHandled = suppressKeywords.some(kw => saved.includes(kw));
+
+            if (!alreadyHandled && !notified.has(def.key)) {
                 notified.add(def.key);
                 showNotification(def.msg, "warn-" + def.key, anchor.original, def);
             }

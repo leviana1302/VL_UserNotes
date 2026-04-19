@@ -1,5 +1,9 @@
 # Changelog
 
+## [6.6] - 2026-04-19
+### Fixed
+- Fix für nicht erfüllte Challenges
+
 ## [6.5] - 2026-04-19
 ### Changed
 - Optimierungen bei Snippets
