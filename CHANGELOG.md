@@ -1,5 +1,9 @@
 # Changelog
 
+## [6.7] - 2026-04-19
+### Fixed
+- Note nur zum Schreiben öffnen, wenn nötig
+
 ## [6.6] - 2026-04-19
 ### Fixed
 - Fix für nicht erfüllte Challenges

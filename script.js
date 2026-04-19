@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      6.6
+// @version      6.7
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -520,9 +520,14 @@
             lines[ccIdx] = expected;
         }
 
-        // WICHTIG: Am Ende IMMER beautifyLines auf die gesamte Note anwenden
-        // (damit auch alte Zeilen wie "KEIN GEOCHECKER" → "❓ KEIN GEOCHECKER" konvertiert werden)
-        setWorkingNote(beautifyLines(lines).join("\n"));
+        // Beautify anwenden und nur speichern wenn sich etwas geändert hat
+        const beautified = beautifyLines(lines).join("\n");
+        if (beautified !== saved) {
+            debug("autoBeautifyOldNote: Änderungen erkannt → setWorkingNote");
+            setWorkingNote(beautified);
+        } else {
+            debug("autoBeautifyOldNote: Keine Änderungen → kein Speichern nötig");
+        }
     }
 
     /**
