@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      5.0
+// @version      5.1
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -165,6 +165,21 @@
     /** Schläft `ms` Millisekunden. */
     const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
+    /**
+     * Setzt den Wert einer Textarea React-kompatibel.
+     * Verwendet den nativen HTMLTextAreaElement.value-Setter, damit React
+     * den neuen Wert in seinen internen State übernimmt.
+     * WICHTIG für Mobilgeräte, wo `ta.value = ...` direkt oft ignoriert wird.
+     */
+    function setTextareaValue(ta, text) {
+        if (!ta) return;
+        const nativeSetter = Object.getOwnPropertyDescriptor(
+            window.HTMLTextAreaElement.prototype, 'value'
+        ).set;
+        nativeSetter.call(ta, text);
+        ta.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
     /** Kopiert Text in die Zwischenablage (mit Mobile-Fallback). */
     function copyToClipboard(text) {
         if (!text) return;
@@ -257,20 +272,34 @@
     }
 
     /**
-     * Reduziert alle aufeinanderfolgende Leerzeilen auf exakt EINE Leerzeile.
+     * Bereinigt Zeilen-Array in EINEM Durchgang:
+     * - Mehrere aufeinanderfolgende Leerzeilen → genau 1 Leerzeile
+     * - Vor jeder Emoji-Zeile (außer am Anfang) → genau 1 Leerzeile
+     * - Entfernt führende Leerzeilen am Anfang
+     *
+     * Funktioniert deterministisch auf Desktop UND Mobile.
      */
-    function removeMultipleBlankLines(lines) {
+    function cleanLines(lines) {
         const result = [];
-        let lastWasBlank = false;
+        let blankCount = 0;
 
         for (const line of lines) {
-            const isBlank = line.trim() === "";
+            const trimmed = line.trim();
+            const isBlank = trimmed === "";
+            const isEmojiLine = !isBlank && EMOJI_START_RE.test(trimmed);
 
-            if (!isBlank || result.length === 0 || !lastWasBlank) {
-                result.push(line);
+            if (isBlank) {
+                blankCount++;
+                continue;
             }
 
-            lastWasBlank = isBlank;
+            // Nicht-leere Zeile: entscheiden, ob eine Leerzeile davor kommen muss
+            if (result.length > 0 && (isEmojiLine || blankCount > 0)) {
+                result.push("");  // genau EINE Leerzeile
+            }
+
+            result.push(line);
+            blankCount = 0;
         }
 
         return result;
@@ -278,34 +307,32 @@
 
     /**
      * Schreibt Zeilen in die Textarea und speichert optional.
-     * Reduziert überzählige Leerzeilen und normalisiert Emoji-Spacing.
+     * Bereinigt Leerzeilen (max. 1 zusammenhängend) und stellt sicher,
+     * dass vor Emoji-Zeilen genau 1 Leerzeile steht.
+     *
+     * Verwendet den nativen HTMLTextAreaElement-Setter, damit React
+     * den neuen Wert auch auf Mobilgeräten übernimmt.
      */
     function writeLines(lines, save = false) {
         const ta = DOM.note;
         if (!ta)              return err("writeLines: Textarea nicht gefunden");
         if (noteWriteLocked)  return err("writeLines: noteWriteLocked=true");
 
-        // 1) ZUERST: Alle aufeinanderfolgende Leerzeilen auf genau eine reduzieren
-        lines = removeMultipleBlankLines(lines);
+        // Einheitliche Bereinigung in einem Durchgang
+        const cleaned = cleanLines(lines);
+        const cleanedText = cleaned.join("\n");
 
-        // 2) DANN: Vor jeder Emoji-Zeile genau eine Leerzeile sicherstellen
-        lines = normalizeEmojiSpacing(lines);
-
-        const cleanedText = lines.join("\n");
-        
-        // 3) Speichere immer die gereinigten Zeilen im Puffer (für Konsistenz)
+        // Puffer synchronisieren
         setWorkingNote(cleanedText);
 
         noteWriteLocked = true;
-        ta.value = cleanedText;
-        
-        // WICHTIG: Input-Event ZUERST dispatchen (damit React seinen State aktualisiert)
-        ta.dispatchEvent(new Event("input", { bubbles: true }));
+
+        // React-kompatibel setzen (funktioniert auf Desktop + Mobile)
+        setTextareaValue(ta, cleanedText);
 
         if (save) {
-            // DANN warten und speichern (React braucht Zeit um State zu aktualisieren)
             setTimeout(() => {
-                debug("writeLines → speichern nach React-Update");
+                debug("writeLines → speichern");
                 DOM.saveBtn?.click();
             }, 200);
         }
@@ -348,26 +375,8 @@
     // ════════════════════════════════════════════════════════════════════════════
 
     /**
-     * Stellt sicher, dass vor jeder Emoji-Zeile genau eine Leerzeile steht
-     * (außer am Anfang). Überzählige Leerzeilen werden reduziert.
+     * Wendet exakte und Präfix-Ersetzungen auf jede Zeile an, dann cleanLines.
      */
-    function normalizeEmojiSpacing(lines) {
-        const result = [];
-        for (const line of lines) {
-            if (line.trim() !== "" && EMOJI_START_RE.test(line.trim()) && result.length > 0) {
-                // Vorherige Leerzeilen entfernen
-                while (result.length > 0 && result[result.length - 1].trim() === "") {
-                    result.pop();
-                }
-                // Genau eine Leerzeile einfügen
-                result.push("");
-            }
-            result.push(line);
-        }
-        return result;
-    }
-
-    /** Wendet exakte und Präfix-Ersetzungen auf jede Zeile an, dann Emoji-Spacing. */
     function beautifyLines(lines) {
         const result = [];
 
@@ -379,10 +388,12 @@
                 continue;
             }
 
-            if (BEAUTIFY_EXACT[t]) {
-                t = BEAUTIFY_EXACT[t];
+            // Prüfe BEAUTIFY_EXACT auf getrimmtem String
+            if (BEAUTIFY_EXACT[t.trim()]) {
+                t = BEAUTIFY_EXACT[t.trim()];
             }
 
+            // Danach immer BEAUTIFY_PREFIX prüfen
             for (const [prefix, emoji] of BEAUTIFY_PREFIX) {
                 if (t.startsWith(prefix)) {
                     if (!t.startsWith(emoji)) t = emoji + t;
@@ -393,7 +404,7 @@
             result.push(t);
         }
 
-        return normalizeEmojiSpacing(result);
+        return cleanLines(result);
     }
 
     // ════════════════════════════════════════════════════════════════════════════
@@ -486,8 +497,11 @@
         if (lines[ccIdx].trim() !== expected) {
             debug("autoBeautifyOldNote: CC-Zeile aktualisiert →", expected);
             lines[ccIdx] = expected;
-            setWorkingNote(beautifyLines(lines).join("\n"));
         }
+
+        // WICHTIG: Am Ende IMMER beautifyLines auf die gesamte Note anwenden
+        // (damit auch alte Zeilen wie "KEIN GEOCHECKER" → "❓ KEIN GEOCHECKER" konvertiert werden)
+        setWorkingNote(beautifyLines(lines).join("\n"));
     }
 
     /**
@@ -568,6 +582,7 @@
      *   autoSave         – sofort speichern nach Einfügen?
      *   removeCC         – CC-Zeile (📌) am Anfang entfernen?
      *   confirmResetCoords – nach Einfügen Reset-Coords-Dialog zeigen?
+     *   noBlankBefore    – true = keine Leerzeile davor einfügen (inline-Snippet)
      *   isLink           – true wenn Snippet ein externer Link ist
      *   linkUrl          – URL für isLink=true (Platzhalter: __GCCODE__)
      */
@@ -615,6 +630,7 @@
         { label: '🚩 WP',       emoji: 'WP', value: '🚩 WP' },
         { label: '🚩 STAGE',    emoji: 'ST', value: '🚩 STAGE' },
         { label: '🚗 Parken: ', emoji: '🚗', value: '🚗 Parken: ' },
+        { label: '➡️ ',               emoji: '➡️', value: '➡️', noBlankBefore: true },
         {
             label: '🔍 PUZZLE-COORDS (Desktop)',
             emoji: '🔍',
@@ -637,13 +653,40 @@
 
     /**
      * Fügt Text in die Textarea ein. Strategie:
+     *  - noBlankBefore: Text direkt am Cursor einfügen (keine Leerzeilen-Logik)
      *  - GeoChecker-Snippets: an definierter Position (nach erstem Block) einfügen
      *  - Note war geschlossen: am Ende anhängen
      *  - Note war offen + Cursor aktiv: an Cursor-Position einfügen
+     *
+     * Verwendet setTextareaValue (React-kompatibel für Mobile).
      */
-    function insertSnippet(text, wasNoteClosed = true) {
+    function insertSnippet(text, wasNoteClosed = true, snippet = null) {
         const ta = DOM.note;
         if (!ta) return;
+
+        // INLINE-Snippets (noBlankBefore): direkt am Cursor einfügen, GAR NICHTS SONST
+        if (snippet?.noBlankBefore) {
+            activateNote();
+            const pos = ta.selectionEnd || ta.value.length;
+
+            // Leerzeichen davor einfügen, wenn keins da ist
+            let prefix = '';
+            if (pos > 0 && ta.value[pos - 1] !== ' ') {
+                prefix = ' ';
+            }
+
+            // Leerzeichen danach einfügen, wenn keins da ist
+            let suffix = '';
+            if (pos < ta.value.length && ta.value[pos] !== ' ') {
+                suffix = ' ';
+            }
+
+            const fullText = prefix + text + suffix;
+            ta.setRangeText(fullText, pos, pos, 'end');
+            ta.dispatchEvent(new Event('input', { bubbles: true }));
+            ta.focus();
+            return;
+        }
 
         const isGeoChecker = text.includes("GEOCHECKER OK") || text.includes("GEOCHECKER FALSCH");
 
@@ -652,13 +695,16 @@
             const lines = ta.value.split("\n");
             let i = 0;
             while (i < lines.length && lines[i].trim() !== "") i++;
-            const insertAt = i + 1;
-            lines.splice(insertAt, 0, "");
-            lines.splice(insertAt + 1, 0, text);
-            ta.value = lines.join("\n");
-            ta.dispatchEvent(new Event("input", { bubbles: true }));
+
+            if (i === lines.length) {
+                lines.push("", text);
+            } else {
+                lines.splice(i + 1, 0, text);
+            }
+
+            const cleaned = cleanLines(lines);
+            setTextareaValue(ta, cleaned.join("\n"));
             ta.setSelectionRange(ta.value.length, ta.value.length);
-            // Fokus mit Verzögerung setzen, damit React-Handler zuerst laufen können
             setTimeout(() => ta.focus(), 10);
             return;
         }
@@ -674,9 +720,14 @@
             const start  = ta.selectionStart;
             const before = ta.value.slice(0, start);
             const after  = ta.value.slice(start);
-            ta.value = before + "\n" + text + after;
-            ta.dispatchEvent(new Event("input", { bubbles: true }));
-            const newPos = before.length + 1 + text.length;
+
+            const separator = before.length === 0 || before.endsWith("\n") ? "" : "\n";
+            const newValue = before + separator + text + after;
+
+            const lines = newValue.split("\n");
+            const cleaned = cleanLines(lines);
+            setTextareaValue(ta, cleaned.join("\n"));
+            const newPos = before.length + separator.length + text.length;
             ta.setSelectionRange(newPos, newPos);
             setTimeout(() => ta.focus(), 10);
             return;
@@ -685,9 +736,14 @@
         // Fall C: Default → am Ende anhängen
         debug("insertSnippet → am Ende");
         const lines = ta.value.split("\n");
-        lines.push("", text);
-        ta.value = lines.join("\n");
-        ta.dispatchEvent(new Event("input", { bubbles: true }));
+        const lastLine = lines.length > 0 ? lines[lines.length - 1] : "";
+        if (lastLine.trim() !== "") {
+            lines.push("");
+        }
+        lines.push(text);
+
+        const cleaned = cleanLines(lines);
+        setTextareaValue(ta, cleaned.join("\n"));
         ta.setSelectionRange(ta.value.length, ta.value.length);
         setTimeout(() => ta.focus(), 10);
     }
@@ -695,7 +751,7 @@
     /** Führt ein Snippet vollständig aus: Text auflösen, einfügen, ggf. speichern. */
     async function applySnippet(sn) {
         log("applySnippet:", sn.label);
-        
+
         // Link-Snippets: sofort öffnen (kein Text in Note)
         if (sn.isLink) {
             if (!gcCode) {
@@ -734,7 +790,7 @@
             }
         }
 
-        insertSnippet(text, noteWasClosed);
+        insertSnippet(text, noteWasClosed, sn);
 
         // Pfad 1: CC-Zeile entfernen (nur wenn vorhanden)
         if (sn.removeCC) {
@@ -1462,8 +1518,7 @@
                 lines.push("🗑️ OLD NOTE:");
                 originalNoteText.split("\n").forEach(l => lines.push(l));
 
-                ta.value = lines.join("\n");
-                ta.dispatchEvent(new Event("input", { bubbles: true }));
+                setTextareaValue(ta, lines.join("\n"));
                 ta.setSelectionRange(ta.value.length, ta.value.length);
 
                 resizeNoteTextarea();
@@ -1515,23 +1570,15 @@
 
         const btnBar = document.createElement("div");
         btnBar.id = "cc-snippet-btns";
-        
+
         // Normale Buttons
         const normalSnippets = SNIPPETS.filter(sn => sn.emoji && !sn.isLink);
         normalSnippets.forEach(sn => btnBar.appendChild(buildSnippetButton(sn)));
-        
-        // 3 unsichtbare Spacer-Buttons (um Link-Buttons auf neue Zeile zu bringen)
-        for (let i = 0; i < 3; i++) {
-            const spacer = document.createElement("button");
-            spacer.style.visibility = "hidden";
-            spacer.style.pointerEvents = "none";
-            btnBar.appendChild(spacer);
-        }
-        
-        // Link-Buttons
+
+        // Link-Buttons (direkt nach normalen Buttons, neue Zeile)
         const linkSnippets = SNIPPETS.filter(sn => sn.isLink);
         linkSnippets.forEach(sn => btnBar.appendChild(buildSnippetButton(sn)));
-        
+
         noteWrapper.insertBefore(btnBar, container.nextSibling);
 
         updateCCBtn();

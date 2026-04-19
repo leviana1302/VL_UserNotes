@@ -1,5 +1,13 @@
 # Changelog
 
+## [5.1] - 2026-04-18
+### Added
+- neues Snippet (➡️)
+
+### Fixed
+- Leerzeilenlogik überarbeitet (funktionierte nicht auf Mobilgeräten)
+- alte Textzeilen wurden teilweise nicht korrigiert
+
 ## [5.0] - 2026-04-18
 ### Added
 - Buttons für PuzzleCoords-DB
