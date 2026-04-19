@@ -28,20 +28,8 @@
         return code;
     })();
 
-    /** Facebook-Gruppen-IDs für die GC-Suche. */
-    const FB_GROUP_IDS = [
-        "2978857879030956",  // Geo-jigidi-solve n' share
-        "678851082133537",   // Lösungshilfen Mystery
-        "504335432942838",   // Geocaching Mystery-Lösungs-Gruppe
-        "721877714491241",   // Geocaching - Tipps und Tricks zu Mystery-Caches
-        "366762873437664",   // Geocaching - Verrückte Verstecke - Hilfe bei Mysteries
-        "312585526091341",   // Geocaching Puzzle Help Club
-        "123013514431454",   // Geocaching
-        "258731947489712",   // Geocaching Community Deutschland
-        "762571793805193",   // Geocaching Niedersachsen
-        "327295933132",      // Geocaching Hamburg / Schleswig Holstein / Niedersachsen
-        "315558138508218"    // Geocaching Oldenburg
-    ];
+    /** Facebook-Suche URL (Top-Suche, Desktop + Mobile). */
+    const FB_SEARCH_URL = "https://www.facebook.com/search/top/?q=__GCCODE__";
 
     /** Facebook-Logo als SVG-Daten-URI (blaues "f" auf Kreis). */
     const FB_LOGO = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTIiIGZpbGw9IiMxODc3RjIiLz48cGF0aCBkPSJNMTYuNSA3LjVoLTJjLS44IDAtMSAuMy0xIDFWMTBoM2wtLjQgM0gxMy41djhIMTB2LThIOC41di0zSDEwVjguM0MxMCA2IDExLjUgNC41IDE0IDQuNWMxLjEgMCAyLjUuMiAyLjUuMlY3LjV6IiBmaWxsPSJ3aGl0ZSIvPjwvc3ZnPg==";
@@ -691,19 +679,19 @@
         if (snippet?.noBlankBefore) {
             activateNote();
             const pos = ta.selectionEnd || ta.value.length;
-
+            
             // Leerzeichen davor einfügen, wenn keins da ist
             let prefix = '';
             if (pos > 0 && ta.value[pos - 1] !== ' ') {
                 prefix = ' ';
             }
-
+            
             // Leerzeichen danach einfügen, wenn keins da ist
             let suffix = '';
             if (pos < ta.value.length && ta.value[pos] !== ' ') {
                 suffix = ' ';
             }
-
+            
             const fullText = prefix + text + suffix;
             ta.setRangeText(fullText, pos, pos, 'end');
             ta.dispatchEvent(new Event('input', { bubbles: true }));
@@ -746,7 +734,7 @@
 
             const separator = before.length === 0 || before.endsWith("\n") ? "" : "\n";
             const newValue = before + separator + text + after;
-
+            
             const lines = newValue.split("\n");
             const cleaned = cleanLines(lines);
             setTextareaValue(ta, cleaned.join("\n"));
@@ -774,7 +762,7 @@
     /** Führt ein Snippet vollständig aus: Text auflösen, einfügen, ggf. speichern. */
     async function applySnippet(sn) {
         log("applySnippet:", sn.label);
-
+        
         // Link-Snippets: sofort öffnen (kein Text in Note)
         if (sn.isLink) {
             if (!gcCode) {
@@ -787,17 +775,23 @@
             return;
         }
 
-        // Facebook-Suche: pro Gruppe einen Tab öffnen
+        // Facebook-Suche: GC-Code in Zwischenablage + neuen Browser-Tab öffnen
         if (sn.isFbSearch) {
             if (!gcCode) {
                 showNotification("GC-Code nicht gefunden.");
                 return;
             }
-            log(`Facebook-Suche: ${FB_GROUP_IDS.length} Gruppen`);
-            FB_GROUP_IDS.forEach(groupId => {
-                const url = `https://www.facebook.com/groups/${groupId}/search/?q=${gcCode}`;
-                window.open(url, "_blank");
-            });
+            const url = FB_SEARCH_URL.replace("__GCCODE__", gcCode);
+            copyToClipboard(gcCode);
+            log(`Facebook-Suche: ${url}`);
+            // rel="noopener noreferrer" + target verhindert Öffnen in FB-App
+            const a = document.createElement("a");
+            a.href = url;
+            a.target = "_blank";
+            a.rel = "noopener noreferrer";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
             return;
         }
 
@@ -1360,6 +1354,12 @@
                 min-height: 36px;
             }
             #cc-snippet-btns button:hover { background: #e0e0e0; }
+            #cc-snippet-btns a {
+                flex: 0 1 calc(10% - 6px);
+                min-height: 36px;
+                padding: 8px 12px;
+            }
+            #cc-snippet-btns a:hover { background: #e0e0e0; }
             @media (max-width: 768px) {
                 #cc-snippet-btns button {
                     padding: 14px 16px;
@@ -1478,11 +1478,36 @@
 
     /** Baut einen einzelnen Schnellzugriff-Button für ein Snippet. */
     function buildSnippetButton(sn) {
+        // FB-Suche: echter <a>-Link damit Safari "In neuem Tab öffnen" anbietet
+        if (sn.isFbSearch) {
+            const url = gcCode
+                ? FB_SEARCH_URL.replace("__GCCODE__", gcCode)
+                : "https://www.facebook.com/";
+            const a = document.createElement("a");
+            a.href = url;
+            a.target = "_blank";
+            a.rel = "noopener noreferrer";
+            a.title = sn.label;
+            // Gleiche CSS-Klasse wie Buttons (per inline-Style da kein className)
+            a.style.cssText = "position:relative;display:inline-flex;align-items:center;justify-content:center;border:1px solid #ccc;border-radius:4px;background:#f5f5f5;cursor:pointer;text-decoration:none;box-sizing:border-box;";
+
+            const img = document.createElement("img");
+            img.src = sn.image;
+            img.style.cssText = "width:20px;height:20px;object-fit:contain;display:block;";
+            img.alt = sn.label;
+            a.appendChild(img);
+
+            // Klick: GC-Code in Zwischenablage kopieren
+            a.addEventListener("click", (e) => {
+                if (gcCode) copyToClipboard(gcCode);
+            });
+            return a;
+        }
+
         const b = document.createElement("button");
         b.type = "button";
 
         if (sn.image) {
-            // Bild-Button (z.B. Facebook-Logo)
             const img = document.createElement("img");
             img.src = sn.image;
             img.style.cssText = "width:20px;height:20px;object-fit:contain;display:block;";
@@ -1617,7 +1642,7 @@
 
         const btnBar = document.createElement("div");
         btnBar.id = "cc-snippet-btns";
-
+        
         // Normale Buttons (emoji, kein Link, kein FB)
         const normalSnippets = SNIPPETS.filter(sn => (sn.emoji || sn.image) && !sn.isLink && !sn.isFbSearch);
         normalSnippets.forEach(sn => btnBar.appendChild(buildSnippetButton(sn)));
@@ -1625,7 +1650,7 @@
         // FB-Button + Link-Buttons (neue Zeile)
         const extraSnippets = SNIPPETS.filter(sn => sn.isFbSearch || sn.isLink);
         extraSnippets.forEach(sn => btnBar.appendChild(buildSnippetButton(sn)));
-
+        
         noteWrapper.insertBefore(btnBar, container.nextSibling);
 
         updateCCBtn();
