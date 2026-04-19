@@ -1,16 +1,22 @@
 # Changelog
 
-## [6.0] - 2026-04-18
+## [6.1] - 2026-04-19
+
+### Fixed
+- "KEIN GEOCHECKER" nur für bestimmte Cachetypen einfügen
+- Undo-Button überarbeitet & Shortcut entfernt
+
+## [6.0] - 2026-04-19
 
 ### Added
 - Facebook-Suche integriert
 
-## [5.2] - 2026-04-18
+## [5.2] - 2026-04-19
 
 ### Fixed
 - Leerzeilenlogik reduzieren hat nicht auf allen Geräten funktioniert
 
-## [5.1] - 2026-04-18
+## [5.1] - 2026-04-19
 ### Added
 - neues Snippet (➡️)
 

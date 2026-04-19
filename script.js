@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      6.0
+// @version      6.1
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -219,6 +219,20 @@
         const t = new Date();
         return `${String(t.getDate()).padStart(2, "0")}.${String(t.getMonth() + 1).padStart(2, "0")}.${t.getFullYear()}`;
     };
+
+    /** Cache-Typen, bei denen "KEIN GEOCHECKER" eingefügt werden soll. */
+    const GEOCACHER_REQUIRED_TYPES = new Set([
+        "Multi-Cache",
+        "Mystery-Cache",
+        "Letterbox-Hybrid",
+        "Wherigo-Geocache"
+    ]);
+
+    /** Liest den Cache-Typ aus dem title-Attribut des Cache-Type-Links. */
+    function getCacheType() {
+        const el = document.querySelector('a[href="/about/cache_types.aspx"][title]');
+        return el?.getAttribute("title") ?? null;
+    }
 
     /** Liest korrigierte Koordinaten aus #uxLatLon (nur wenn .italic-Klasse vorhanden). */
     function getCorrectedCoords() {
@@ -679,19 +693,19 @@
         if (snippet?.noBlankBefore) {
             activateNote();
             const pos = ta.selectionEnd || ta.value.length;
-            
+
             // Leerzeichen davor einfügen, wenn keins da ist
             let prefix = '';
             if (pos > 0 && ta.value[pos - 1] !== ' ') {
                 prefix = ' ';
             }
-            
+
             // Leerzeichen danach einfügen, wenn keins da ist
             let suffix = '';
             if (pos < ta.value.length && ta.value[pos] !== ' ') {
                 suffix = ' ';
             }
-            
+
             const fullText = prefix + text + suffix;
             ta.setRangeText(fullText, pos, pos, 'end');
             ta.dispatchEvent(new Event('input', { bubbles: true }));
@@ -734,7 +748,7 @@
 
             const separator = before.length === 0 || before.endsWith("\n") ? "" : "\n";
             const newValue = before + separator + text + after;
-            
+
             const lines = newValue.split("\n");
             const cleaned = cleanLines(lines);
             setTextareaValue(ta, cleaned.join("\n"));
@@ -762,7 +776,7 @@
     /** Führt ein Snippet vollständig aus: Text auflösen, einfügen, ggf. speichern. */
     async function applySnippet(sn) {
         log("applySnippet:", sn.label);
-        
+
         // Link-Snippets: sofort öffnen (kein Text in Note)
         if (sn.isLink) {
             if (!gcCode) {
@@ -1060,6 +1074,13 @@
         if (foundAnyChecker) return;
         if (saved.includes("KEIN GEOCHECKER")) return;
 
+        // Nur einfügen, wenn Cache-Typ einen Geochecker erfordert
+        const cacheType = getCacheType();
+        if (!cacheType || !GEOCACHER_REQUIRED_TYPES.has(cacheType)) {
+            debug(`scanCheckers: Cache-Typ "${cacheType}" erfordert keinen Geochecker`);
+            return;
+        }
+
         // Keine Checker gefunden → "KEIN GEOCHECKER" einfügen
         let lines = getWorkingNote().split("\n");
         const coords = getCorrectedCoords();
@@ -1319,9 +1340,11 @@
                 color: white;
                 font-weight: bold;
                 cursor: pointer;
-                transition: background 0.2s;
+                transition: opacity 0.2s;
             }
-            #cc-btn[data-vl-mode="undo"] { background: #01579b; }
+            #cc-btn:disabled {
+                cursor: not-allowed;
+            }
             #cc-snippets {
                 padding: 6px;
                 border-radius: 4px;
@@ -1447,15 +1470,9 @@
         const currentText = DOM.note?.value ?? getSavedNote();
         const changed = currentText.trim() !== originalNoteText.trim();
 
-        if (changed && btn.dataset.vlMode !== "undo") {
-            btn.dataset.vlMode = "undo";
-            btn.textContent    = "↩";
-            btn.title          = "Ursprüngliche Note am Ende einfügen (ohne Speichern)";
-        } else if (!changed && btn.dataset.vlMode !== "cc") {
-            btn.dataset.vlMode = "cc";
-            btn.title          = "";
-            btn.textContent    = "📝";
-        }
+        // Nur Opacity ändern: grau (0.4) wenn unverändert, normal (1) wenn geändert
+        btn.style.opacity = changed ? "1" : "0.4";
+        btn.disabled = !changed;  // Button deaktivieren wenn unverändert
     }
 
     /** Erzeugt einen Emoji-Container mit passendem Scale-Fix (Emoji oder Buchstaben). */
@@ -1572,49 +1589,30 @@
         const btn = document.createElement("button");
         btn.id             = "cc-btn";
         btn.type           = "button";
-        btn.dataset.vlMode = "cc";
-        btn.textContent    = "📝";
+        btn.dataset.vlMode = "undo";  // Immer Undo-Modus
+        btn.textContent    = "↩";     // Immer Undo-Emoji
+        btn.title          = "Ursprüngliche Note am Ende einfügen (ohne Speichern)";
+        btn.style.opacity  = "0.4";   // Grau (disabled) am Anfang
 
         btn.addEventListener("click", async e => {
             e.preventDefault();
             e.stopPropagation();
 
-            // Undo-Modus: ursprüngliche Note anhängen
-            if (btn.dataset.vlMode === "undo") {
-                activateNote();
-                const ta = DOM.note;
-                if (!ta || originalNoteText === null) return;
-
-                const lines = ta.value.split("\n");
-                if (lines[lines.length - 1].trim() !== "") lines.push("");
-                lines.push("🗑️ OLD NOTE:");
-                originalNoteText.split("\n").forEach(l => lines.push(l));
-
-                setTextareaValue(ta, lines.join("\n"));
-                ta.setSelectionRange(ta.value.length, ta.value.length);
-
-                resizeNoteTextarea();
-                scrollToNote();
-                log("Undo: ursprüngliche Note angehängt");
-                return;
-            }
-
-            // CC-Modus: Koordinaten einfügen
-            if (!cachedCoords) {
-                showNotification("Keine korrigierten Koordinaten gefunden.");
-                return;
-            }
-
             activateNote();
-            btn.textContent = "✓"; // kurze Bestätigung
+            const ta = DOM.note;
+            if (!ta || originalNoteText === null) return;
 
-            await waitFor(
-                () => { const t = DOM.note; return t?.value.trim() ? t : null; },
-                { interval: 80, timeoutMs: 1680 }
-            );
+            const lines = ta.value.split("\n");
+            if (lines[lines.length - 1].trim() !== "") lines.push("");
+            lines.push("🗑️ OLD NOTE:");
+            originalNoteText.split("\n").forEach(l => lines.push(l));
 
-            applyCC(cachedCoords);
-            setTimeout(updateCCBtn, 1200);
+            setTextareaValue(ta, lines.join("\n"));
+            ta.setSelectionRange(ta.value.length, ta.value.length);
+
+            resizeNoteTextarea();
+            scrollToNote();
+            log("Undo: ursprüngliche Note angehängt");
         });
 
         return btn;
@@ -1642,7 +1640,7 @@
 
         const btnBar = document.createElement("div");
         btnBar.id = "cc-snippet-btns";
-        
+
         // Normale Buttons (emoji, kein Link, kein FB)
         const normalSnippets = SNIPPETS.filter(sn => (sn.emoji || sn.image) && !sn.isLink && !sn.isFbSearch);
         normalSnippets.forEach(sn => btnBar.appendChild(buildSnippetButton(sn)));
@@ -1650,7 +1648,7 @@
         // FB-Button + Link-Buttons (neue Zeile)
         const extraSnippets = SNIPPETS.filter(sn => sn.isFbSearch || sn.isLink);
         extraSnippets.forEach(sn => btnBar.appendChild(buildSnippetButton(sn)));
-        
+
         noteWrapper.insertBefore(btnBar, container.nextSibling);
 
         updateCCBtn();
@@ -1745,16 +1743,6 @@
             activateNote();
             scrollToNote();
             return;
-        }
-
-        // Ctrl+Z → Undo (nur im ↩-Modus)
-        if (key === "z") {
-            const ccBtn = document.getElementById("cc-btn");
-            if (ccBtn?.dataset.vlMode === "undo") {
-                e.preventDefault();
-                log("Shortcut Ctrl+Z → Undo");
-                ccBtn.click();
-            }
         }
     }
 
