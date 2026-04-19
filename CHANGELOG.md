@@ -1,5 +1,9 @@
 # Changelog
 
+## [6.5] - 2026-04-19
+### Changed
+- Optimierungen bei Snippets
+
 ## [6.4] - 2026-04-19
 ### Changed
 - Optimierungen bei der Link-Suche

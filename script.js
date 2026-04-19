@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      6.4
+// @version      6.5
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -725,19 +725,19 @@
         if (snippet?.noBlankBefore) {
             activateNote();
             const pos = ta.selectionEnd || ta.value.length;
-
+            
             // Leerzeichen davor einfügen, wenn keins da ist
             let prefix = '';
             if (pos > 0 && ta.value[pos - 1] !== ' ') {
                 prefix = ' ';
             }
-
+            
             // Leerzeichen danach einfügen, wenn keins da ist
             let suffix = '';
             if (pos < ta.value.length && ta.value[pos] !== ' ') {
                 suffix = ' ';
             }
-
+            
             const fullText = prefix + text + suffix;
             ta.setRangeText(fullText, pos, pos, 'end');
             ta.dispatchEvent(new Event('input', { bubbles: true }));
@@ -780,7 +780,7 @@
 
             const separator = before.length === 0 || before.endsWith("\n") ? "" : "\n";
             const newValue = before + separator + text + after;
-
+            
             const lines = newValue.split("\n");
             const cleaned = cleanLines(lines);
             setTextareaValue(ta, cleaned.join("\n"));
@@ -806,45 +806,57 @@
     }
 
     /** Führt ein Snippet vollständig aus: Text auflösen, einfügen, ggf. speichern. */
+    /** Öffnet einen externen Link (isLink-Snippet). */
+    function applyLinkSnippet(sn) {
+        if (!gcCode) { showNotification("GC-Code nicht gefunden."); return; }
+        const url = sn.linkUrl.replace("__GCCODE__", gcCode);
+        log(`Link geöffnet: ${sn.label}`);
+        window.open(url, "_blank");
+    }
+
+    /** Öffnet Facebook-Suche und kopiert GC-Code in Zwischenablage (isFbSearch-Snippet). */
+    function applyFbSnippet() {
+        if (!gcCode) { showNotification("GC-Code nicht gefunden."); return; }
+        const url = FB_SEARCH_URL.replace("__GCCODE__", gcCode);
+        copyToClipboard(gcCode);
+        log(`Facebook-Suche: ${url}`);
+        const a = document.createElement("a");
+        a.href = url;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+
+    /** Löst __COORDS__-Platzhalter auf und aktualisiert ggf. das Dropdown-Label. */
+    async function resolveSnippetText(sn) {
+        let text = sn.value;
+        if (!text.includes("__COORDS__")) return text;
+
+        const liveCoords = await waitForCoords();
+        text = text.replace("__COORDS__", liveCoords ?? "?");
+
+        if (liveCoords) {
+            const opt = document.querySelector('#cc-snippets [data-vl-key="falsch"]');
+            if (opt) {
+                const hint = opt.dataset.shortcutKey ? `  [Alt+${opt.dataset.shortcutKey}]` : "";
+                opt.textContent = `❌ GEOCHECKER FALSCH (${liveCoords})${hint}`;
+            }
+        }
+        return text;
+    }
+
+    /** Hauptfunktion: Snippet anwenden (Text einfügen, ggf. speichern). */
     async function applySnippet(sn) {
         log("applySnippet:", sn.label);
 
-        // Link-Snippets: sofort öffnen (kein Text in Note)
-        if (sn.isLink) {
-            if (!gcCode) {
-                showNotification("GC-Code nicht gefunden.");
-                return;
-            }
-            const url = sn.linkUrl.replace("__GCCODE__", gcCode);
-            log(`Link geöffnet: ${sn.label}`);
-            window.open(url, "_blank");
-            return;
-        }
-
-        // Facebook-Suche: GC-Code in Zwischenablage + neuen Browser-Tab öffnen
-        if (sn.isFbSearch) {
-            if (!gcCode) {
-                showNotification("GC-Code nicht gefunden.");
-                return;
-            }
-            const url = FB_SEARCH_URL.replace("__GCCODE__", gcCode);
-            copyToClipboard(gcCode);
-            log(`Facebook-Suche: ${url}`);
-            // rel="noopener noreferrer" + target verhindert Öffnen in FB-App
-            const a = document.createElement("a");
-            a.href = url;
-            a.target = "_blank";
-            a.rel = "noopener noreferrer";
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            return;
-        }
+        if (sn.isLink)     { applyLinkSnippet(sn); return; }
+        if (sn.isFbSearch) { applyFbSnippet();     return; }
 
         const noteWasClosed = activateNote();
         if (!DOM.note) return;
 
-        // Bei frisch geöffneter Note: auf Textarea-Content warten
         if (noteWasClosed) {
             await waitFor(
                 () => DOM.note?.value.trim(),
@@ -852,24 +864,9 @@
             );
         }
 
-        // __COORDS__-Platzhalter auflösen
-        let text = sn.value;
-        if (text.includes("__COORDS__")) {
-            const liveCoords = await waitForCoords();
-            text = text.replace("__COORDS__", liveCoords ?? "?");
-
-            if (liveCoords) {
-                const opt = document.querySelector('#cc-snippets [data-vl-key="falsch"]');
-                if (opt) {
-                    const hint = opt.dataset.shortcutKey ? `  [Alt+${opt.dataset.shortcutKey}]` : "";
-                    opt.textContent = `❌ GEOCHECKER FALSCH (${liveCoords})${hint}`;
-                }
-            }
-        }
-
+        const text = await resolveSnippetText(sn);
         insertSnippet(text, noteWasClosed, sn);
 
-        // Pfad 1: CC-Zeile entfernen (nur wenn vorhanden)
         if (sn.removeCC) {
             debug("Snippet: removeCC=true → CC-Zeile entfernen");
             const lines = DOM.note.value.split("\n");
@@ -882,14 +879,12 @@
             return;
         }
 
-        // Pfad 2: AutoSave
         if (sn.autoSave) {
             debug("Snippet: autoSave=true → speichern");
             writeLines(DOM.note.value.split("\n"), true);
             return;
         }
 
-        // Pfad 3: Kein Save → nur Cursor setzen
         debug("Snippet: kein autoSave, nur Cursor-Focus");
         DOM.note.focus();
         resizeNoteTextarea();
@@ -1676,7 +1671,7 @@
 
         const btnBar = document.createElement("div");
         btnBar.id = "cc-snippet-btns";
-
+        
         // Normale Buttons (emoji, kein Link, kein FB)
         const normalSnippets = SNIPPETS.filter(sn => (sn.emoji || sn.image) && !sn.isLink && !sn.isFbSearch);
         normalSnippets.forEach(sn => btnBar.appendChild(buildSnippetButton(sn)));
@@ -1684,7 +1679,7 @@
         // FB-Button + Link-Buttons (neue Zeile)
         const extraSnippets = SNIPPETS.filter(sn => sn.isFbSearch || sn.isLink);
         extraSnippets.forEach(sn => btnBar.appendChild(buildSnippetButton(sn)));
-
+        
         noteWrapper.insertBefore(btnBar, container.nextSibling);
 
         updateCCBtn();
@@ -1695,12 +1690,24 @@
         debug("UI hinzugefügt");
     }
 
-    /** Startet den regelmäßigen DOM-Monitor (Checker-Warnungen + CC-Button). */
+    /**
+     * Startet den DOM-Monitor für Checker-Warnungen.
+     * MutationObserver auf DOM.savedNote: feuert nur wenn sich der gespeicherte
+     * Notiz-Text tatsächlich ändert (nach dem Speichern), statt alle 500ms zu pollen.
+     */
     function startDomMonitor() {
-        setInterval(() => {
+        const target = DOM.savedNote;
+        if (!target) {
+            warn("startDomMonitor: DOM.savedNote nicht gefunden");
+            return;
+        }
+
+        const observer = new MutationObserver(() => {
             if (notified.size > 0) updateCheckerWarnings();
-        }, TIMINGS.domMonitorInterval);
-        debug("DOM-Monitor gestartet");
+        });
+
+        observer.observe(target, { characterData: true, childList: true, subtree: true });
+        debug("DOM-Monitor gestartet (MutationObserver)");
     }
 
     /**
