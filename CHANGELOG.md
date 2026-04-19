@@ -1,5 +1,10 @@
 # Changelog
 
+## [5.2] - 2026-04-18
+
+### Fixed
+- Leerzeilenlogik reduzieren hat nicht auf allen Geräten funktioniert
+
 ## [5.1] - 2026-04-18
 ### Added
 - neues Snippet (➡️)
