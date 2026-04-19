@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      6.2
+// @version      6.3
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -234,6 +234,9 @@
         return el?.getAttribute("title") ?? null;
     }
 
+    /** Cache-Typ der aktuellen Seite (einmal beim Start ermittelt, ändert sich nicht). */
+    const cacheType = getCacheType();
+
     /** Liest korrigierte Koordinaten aus #uxLatLon (nur wenn .italic-Klasse vorhanden). */
     function getCorrectedCoords() {
         const el = DOM.corrected;
@@ -397,6 +400,9 @@
     /**
      * Wendet exakte und Präfix-Ersetzungen auf jede Zeile an, dann cleanLines.
      */
+    /** Regex zum Erkennen von Koordinatenpaaren (N/S + E/W, verschiedene Schreibweisen). */
+    const COORD_NORMALIZE_RE = /([NS])\s*(\d{1,3})\s*°?\s*(\d{1,2})\.(\d{1,6})\s*([EW])\s*(\d{1,3})\s*°?\s*(\d{1,2})\.(\d{1,6})/gi;
+
     /**
      * Normalisiert Koordinaten in einer Zeile auf das Standardformat:
      *   N DD° MM.MMM E DDD° MM.MMM
@@ -408,8 +414,9 @@
      *   "N 52° 7.72 E 7° 9.5"      → "N 52° 07.720 E 007° 09.500"
      */
     function normalizeCoords(line) {
+        COORD_NORMALIZE_RE.lastIndex = 0;
         return line.replace(
-            /([NS])\s*(\d{1,3})\s*°?\s*(\d{1,2})\.(\d{1,6})\s*([EW])\s*(\d{1,3})\s*°?\s*(\d{1,2})\.(\d{1,6})/gi,
+            COORD_NORMALIZE_RE,
             (_, ns, latDeg, latMin, latDec, ew, lonDeg, lonMin, lonDec) => {
                 const latD = String(parseInt(latDeg, 10)).padStart(2, '0');
                 const lonD = String(parseInt(lonDeg, 10)).padStart(3, '0');
@@ -718,19 +725,19 @@
         if (snippet?.noBlankBefore) {
             activateNote();
             const pos = ta.selectionEnd || ta.value.length;
-            
+
             // Leerzeichen davor einfügen, wenn keins da ist
             let prefix = '';
             if (pos > 0 && ta.value[pos - 1] !== ' ') {
                 prefix = ' ';
             }
-            
+
             // Leerzeichen danach einfügen, wenn keins da ist
             let suffix = '';
             if (pos < ta.value.length && ta.value[pos] !== ' ') {
                 suffix = ' ';
             }
-            
+
             const fullText = prefix + text + suffix;
             ta.setRangeText(fullText, pos, pos, 'end');
             ta.dispatchEvent(new Event('input', { bubbles: true }));
@@ -773,7 +780,7 @@
 
             const separator = before.length === 0 || before.endsWith("\n") ? "" : "\n";
             const newValue = before + separator + text + after;
-            
+
             const lines = newValue.split("\n");
             const cleaned = cleanLines(lines);
             setTextareaValue(ta, cleaned.join("\n"));
@@ -801,7 +808,7 @@
     /** Führt ein Snippet vollständig aus: Text auflösen, einfügen, ggf. speichern. */
     async function applySnippet(sn) {
         log("applySnippet:", sn.label);
-        
+
         // Link-Snippets: sofort öffnen (kein Text in Note)
         if (sn.isLink) {
             if (!gcCode) {
@@ -1100,7 +1107,6 @@
         if (saved.includes("KEIN GEOCHECKER")) return;
 
         // Nur einfügen, wenn Cache-Typ einen Geochecker erfordert
-        const cacheType = getCacheType();
         if (!cacheType || !GEOCACHER_REQUIRED_TYPES.has(cacheType)) {
             debug(`scanCheckers: Cache-Typ "${cacheType}" erfordert keinen Geochecker`);
             return;
@@ -1668,7 +1674,7 @@
 
         const btnBar = document.createElement("div");
         btnBar.id = "cc-snippet-btns";
-        
+
         // Normale Buttons (emoji, kein Link, kein FB)
         const normalSnippets = SNIPPETS.filter(sn => (sn.emoji || sn.image) && !sn.isLink && !sn.isFbSearch);
         normalSnippets.forEach(sn => btnBar.appendChild(buildSnippetButton(sn)));
@@ -1676,18 +1682,21 @@
         // FB-Button + Link-Buttons (neue Zeile)
         const extraSnippets = SNIPPETS.filter(sn => sn.isFbSearch || sn.isLink);
         extraSnippets.forEach(sn => btnBar.appendChild(buildSnippetButton(sn)));
-        
+
         noteWrapper.insertBefore(btnBar, container.nextSibling);
 
         updateCCBtn();
+
+        // updateCCBtn bei Änderungen in der Textarea (statt Polling)
+        DOM.note?.addEventListener('input', updateCCBtn);
+
         debug("UI hinzugefügt");
     }
 
     /** Startet den regelmäßigen DOM-Monitor (Checker-Warnungen + CC-Button). */
     function startDomMonitor() {
         setInterval(() => {
-            updateCheckerWarnings();
-            updateCCBtn();
+            if (notified.size > 0) updateCheckerWarnings();
         }, TIMINGS.domMonitorInterval);
         debug("DOM-Monitor gestartet");
     }
