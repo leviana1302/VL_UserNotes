@@ -1,5 +1,9 @@
 # Changelog
 
+## [6.4] - 2026-04-19
+### Changed
+- Optimierungen bei der Link-Suche
+
 ## [6.3] - 2026-04-19
 ### Changed
 - kleine Performance-Optimierungen

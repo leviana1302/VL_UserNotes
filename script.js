@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      6.3
+// @version      6.4
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -55,29 +55,6 @@
 
     /** Erkennt Zeilen, die mit einem Emoji (Unicode Extended_Pictographic) beginnen. */
     const EMOJI_START_RE = /^\p{Extended_Pictographic}/u;
-
-    /** Exakte Ersetzungen für Beautify (komplette Zeile). */
-    const BEAUTIFY_EXACT = {
-        "---":              "",
-        "MESSAGE:":         "✉️ MESSAGE:",
-        "SOLUTION:":        "💡 SOLUTION:",
-        "KEIN GEOCHECKER":  "❓ KEIN GEOCHECKER"
-    };
-
-    /** Präfix-Ersetzungen (Zeile fängt mit Key an → Emoji davor). */
-    const BEAUTIFY_PREFIX = [
-        ["MESSAGE:",                "✉️ "],
-        ["GC-APPS:",                "🔴 "],
-        ["GEOCHECKER OK",           "✅ "],
-        ["GEOCHECKER FALSCH",       "❌ "],
-        ["CERTITUDE:",              "🟢 "],
-        ["CHALLENGE ERFÜLLT",       "🏆 "],
-        ["CHALLENGE NICHT ERFÜLLT", "⛔ "],
-        ["HINT:",                   "👉 "],
-        ["WP",                      "🚩 "],
-        ["STAGE",                   "🚩 "],
-        ["JIGIDI",                  "🧩 "]
-    ];
 
     /** Emojis, die kleiner dargestellt werden und Scale-Fix brauchen. */
     const SMALL_EMOJIS = new Set(["✳️", "✉️", "⚠️"]);
@@ -620,8 +597,31 @@
     }
 
     // ════════════════════════════════════════════════════════════════════════════
-    // ⭐ 12. SNIPPET-DEFINITIONEN
+    // ⭐ 12. SNIPPET-DEFINITIONEN & BEAUTIFY-REGELN
     // ════════════════════════════════════════════════════════════════════════════
+
+    /** Exakte Ersetzungen für Beautify (getrimmte komplette Zeile → Ersatz). */
+    const BEAUTIFY_EXACT = {
+        "---":              "",
+        "MESSAGE:":         "✉️ MESSAGE:",
+        "SOLUTION:":        "💡 SOLUTION:",
+        "KEIN GEOCHECKER":  "❓ KEIN GEOCHECKER"
+    };
+
+    /** Präfix-Ersetzungen für Beautify (Zeile fängt mit Key an → Emoji davor). */
+    const BEAUTIFY_PREFIX = [
+        ["MESSAGE:",                "✉️ "],
+        ["GC-APPS:",                "🔴 "],
+        ["GEOCHECKER OK",           "✅ "],
+        ["GEOCHECKER FALSCH",       "❌ "],
+        ["CERTITUDE:",              "🟢 "],
+        ["CHALLENGE ERFÜLLT",       "🏆 "],
+        ["CHALLENGE NICHT ERFÜLLT", "⛔ "],
+        ["HINT:",                   "👉 "],
+        ["WP",                      "🚩 "],
+        ["STAGE",                   "🚩 "],
+        ["JIGIDI",                  "🧩 "]
+    ];
 
     /**
      * Ein Snippet beschreibt einen einfügbaren Textbaustein oder Link.
@@ -1049,15 +1049,17 @@
     };
 
     /**
-     * Scannt die Seite nach Checker-Links und zeigt Warnungen an.
-     * Fügt bei JIGIDI automatisch eine "UNSOLVED"-Zeile in die Note ein.
-     * Bei keinen Checkern: fügt "KEIN GEOCHECKER" ein.
+     * Alle Checker-relevanten Links aus den Cache-Beschreibungsbereichen.
+     * Nur .UserSuppliedContent-Divs werden durchsucht (statt der gesamten Seite),
+     * da externe Checker-Links ausschließlich dort vorkommen.
+     * Einmalig gecacht — ändert sich nach Seitenload nicht.
      */
+    const checkerAnchors = [...document.querySelectorAll(".UserSuppliedContent a[href]")]
+        .map(a => ({ original: a.href, lower: a.href.toLowerCase() }));
+
     function scanCheckers() {
         log("scanCheckers");
         const saved = getWorkingNote().toUpperCase();
-        const anchors = [...document.querySelectorAll("a[href]")]
-            .map(a => ({ original: a.href, lower: a.href.toLowerCase() }));
 
         let foundAnyChecker = false;
 
@@ -1077,7 +1079,7 @@
 
         // Externe Checker + Jigidi-Behandlung
         for (const def of CHECKER_DEFS) {
-            const anchor = anchors.find(a => def.match(a.lower));
+            const anchor = checkerAnchors.find(a => def.match(a.lower));
             if (!anchor) continue;
 
             if (def.key !== "JIGIDI") foundAnyChecker = true;
