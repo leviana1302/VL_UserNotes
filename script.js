@@ -1334,16 +1334,20 @@
             }
             #cc-btn {
                 padding: 8px 12px;
-                border: none;
+                border: 1px solid #ccc;
                 border-radius: 4px;
-                background: #1b5e20;
-                color: white;
+                background: #f5f5f5;
+                color: #333;
                 font-weight: bold;
                 cursor: pointer;
-                transition: opacity 0.2s;
+                transition: background 0.2s;
             }
             #cc-btn:disabled {
+                background: #e8e8e8;
                 cursor: not-allowed;
+            }
+            #cc-btn:hover:not(:disabled) {
+                background: #e0e0e0;
             }
             #cc-snippets {
                 padding: 6px;
@@ -1470,9 +1474,8 @@
         const currentText = DOM.note?.value ?? getSavedNote();
         const changed = currentText.trim() !== originalNoteText.trim();
 
-        // Nur Opacity ändern: grau (0.4) wenn unverändert, normal (1) wenn geändert
-        btn.style.opacity = changed ? "1" : "0.4";
-        btn.disabled = !changed;  // Button deaktivieren wenn unverändert
+        // Button deaktivieren wenn Note unverändert, aktivieren wenn geändert
+        btn.disabled = !changed;
     }
 
     /** Erzeugt einen Emoji-Container mit passendem Scale-Fix (Emoji oder Buchstaben). */
@@ -1592,7 +1595,7 @@
         btn.dataset.vlMode = "undo";  // Immer Undo-Modus
         btn.textContent    = "↩";     // Immer Undo-Emoji
         btn.title          = "Ursprüngliche Note am Ende einfügen (ohne Speichern)";
-        btn.style.opacity  = "0.4";   // Grau (disabled) am Anfang
+        btn.disabled        = true;    // Grau am Anfang (disabled state)
 
         btn.addEventListener("click", async e => {
             e.preventDefault();
