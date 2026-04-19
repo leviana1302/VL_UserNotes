@@ -45,7 +45,6 @@
         waitForSolution:     30000,   // Solution-Checker Response
         startupDelay:          500,   // Pipeline-Start nach load-Event
         checkerBtnDelay:       500,   // Nach CheckerButton-Klick
-        domMonitorInterval:    500,   // DOM-Monitor Interval
         viewportZoomDelay:     100    // Mobile-Zoom Delay
     };
 
@@ -66,7 +65,6 @@
     const log   = (...args) => console.log("[VL]",   ...args);
     const debug = (...args) => console.debug("[VL]", ...args);
     const warn  = (...args) => console.warn("[VL]",  ...args);
-    const err   = (...args) => console.error("[VL]", ...args);
 
     log(`=== ${SCRIPT_NAME} ${SCRIPT_VERSION} gestartet ===`);
 
@@ -205,14 +203,8 @@
         "Wherigo-Geocache"
     ]);
 
-    /** Liest den Cache-Typ aus dem title-Attribut des Cache-Type-Links. */
-    function getCacheType() {
-        const el = document.querySelector('a[href="/about/cache_types.aspx"][title]');
-        return el?.getAttribute("title") ?? null;
-    }
-
     /** Cache-Typ der aktuellen Seite (einmal beim Start ermittelt, ändert sich nicht). */
-    const cacheType = getCacheType();
+    const cacheType = document.querySelector('a[href="/about/cache_types.aspx"][title]')?.getAttribute("title") ?? null;
 
     /** Liest korrigierte Koordinaten aus #uxLatLon (nur wenn .italic-Klasse vorhanden). */
     function getCorrectedCoords() {
@@ -315,8 +307,8 @@
      */
     function writeLines(lines, save = false) {
         const ta = DOM.note;
-        if (!ta)              return err("writeLines: Textarea nicht gefunden");
-        if (noteWriteLocked)  return err("writeLines: noteWriteLocked=true");
+        if (!ta)              return warn("writeLines: Textarea nicht gefunden");
+        if (noteWriteLocked)  return warn("writeLines: noteWriteLocked=true");
 
         // Einheitliche Bereinigung in einem Durchgang
         const cleaned = cleanLines(lines);
@@ -725,19 +717,19 @@
         if (snippet?.noBlankBefore) {
             activateNote();
             const pos = ta.selectionEnd || ta.value.length;
-            
+
             // Leerzeichen davor einfügen, wenn keins da ist
             let prefix = '';
             if (pos > 0 && ta.value[pos - 1] !== ' ') {
                 prefix = ' ';
             }
-            
+
             // Leerzeichen danach einfügen, wenn keins da ist
             let suffix = '';
             if (pos < ta.value.length && ta.value[pos] !== ' ') {
                 suffix = ' ';
             }
-            
+
             const fullText = prefix + text + suffix;
             ta.setRangeText(fullText, pos, pos, 'end');
             ta.dispatchEvent(new Event('input', { bubbles: true }));
@@ -780,7 +772,7 @@
 
             const separator = before.length === 0 || before.endsWith("\n") ? "" : "\n";
             const newValue = before + separator + text + after;
-            
+
             const lines = newValue.split("\n");
             const cleaned = cleanLines(lines);
             setTextareaValue(ta, cleaned.join("\n"));
@@ -951,7 +943,7 @@
                 log("Reset-Coords: Wiederherstellen geklickt");
                 restoreBtn.click();
             } else {
-                err("Reset-Coords: Wiederherstellen-Button nicht gefunden");
+                warn("Reset-Coords: Wiederherstellen-Button nicht gefunden");
             }
         });
     }
@@ -1671,7 +1663,7 @@
 
         const btnBar = document.createElement("div");
         btnBar.id = "cc-snippet-btns";
-        
+
         // Normale Buttons (emoji, kein Link, kein FB)
         const normalSnippets = SNIPPETS.filter(sn => (sn.emoji || sn.image) && !sn.isLink && !sn.isFbSearch);
         normalSnippets.forEach(sn => btnBar.appendChild(buildSnippetButton(sn)));
@@ -1679,7 +1671,7 @@
         // FB-Button + Link-Buttons (neue Zeile)
         const extraSnippets = SNIPPETS.filter(sn => sn.isFbSearch || sn.isLink);
         extraSnippets.forEach(sn => btnBar.appendChild(buildSnippetButton(sn)));
-        
+
         noteWrapper.insertBefore(btnBar, container.nextSibling);
 
         updateCCBtn();
