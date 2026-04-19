@@ -1,5 +1,10 @@
 # Changelog
 
+## [6.2] - 2026-04-19
+
+### Added
+- einheitliche Formatierung aller Koordinaten
+
 ## [6.1] - 2026-04-19
 
 ### Fixed

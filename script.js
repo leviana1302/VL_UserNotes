@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      6.1
+// @version      6.2
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -397,6 +397,31 @@
     /**
      * Wendet exakte und Präfix-Ersetzungen auf jede Zeile an, dann cleanLines.
      */
+    /**
+     * Normalisiert Koordinaten in einer Zeile auf das Standardformat:
+     *   N DD° MM.MMM E DDD° MM.MMM
+     *
+     * Korrigiert: fehlende Leerzeichen, fehlendes °, fehlende führende Nullen.
+     * Beispiele:
+     *   "N52°17.721E7°9.566"        → "N 52° 17.721 E 007° 09.566"
+     *   "N 52 17.721 E 007 09.566"  → "N 52° 17.721 E 007° 09.566"
+     *   "N 52° 7.72 E 7° 9.5"      → "N 52° 07.720 E 007° 09.500"
+     */
+    function normalizeCoords(line) {
+        return line.replace(
+            /([NS])\s*(\d{1,3})\s*°?\s*(\d{1,2})\.(\d{1,6})\s*([EW])\s*(\d{1,3})\s*°?\s*(\d{1,2})\.(\d{1,6})/gi,
+            (_, ns, latDeg, latMin, latDec, ew, lonDeg, lonMin, lonDec) => {
+                const latD = String(parseInt(latDeg, 10)).padStart(2, '0');
+                const lonD = String(parseInt(lonDeg, 10)).padStart(3, '0');
+                const latM = String(parseInt(latMin, 10)).padStart(2, '0');
+                const lonM = String(parseInt(lonMin, 10)).padStart(2, '0');
+                const latF = latDec.slice(0, 3).padEnd(3, '0');
+                const lonF = lonDec.slice(0, 3).padEnd(3, '0');
+                return `${ns.toUpperCase()} ${latD}° ${latM}.${latF} ${ew.toUpperCase()} ${lonD}° ${lonM}.${lonF}`;
+            }
+        );
+    }
+
     function beautifyLines(lines) {
         const result = [];
 
@@ -421,7 +446,7 @@
                 }
             }
 
-            result.push(t);
+            result.push(normalizeCoords(t));
         }
 
         return cleanLines(result);
@@ -693,19 +718,19 @@
         if (snippet?.noBlankBefore) {
             activateNote();
             const pos = ta.selectionEnd || ta.value.length;
-
+            
             // Leerzeichen davor einfügen, wenn keins da ist
             let prefix = '';
             if (pos > 0 && ta.value[pos - 1] !== ' ') {
                 prefix = ' ';
             }
-
+            
             // Leerzeichen danach einfügen, wenn keins da ist
             let suffix = '';
             if (pos < ta.value.length && ta.value[pos] !== ' ') {
                 suffix = ' ';
             }
-
+            
             const fullText = prefix + text + suffix;
             ta.setRangeText(fullText, pos, pos, 'end');
             ta.dispatchEvent(new Event('input', { bubbles: true }));
@@ -748,7 +773,7 @@
 
             const separator = before.length === 0 || before.endsWith("\n") ? "" : "\n";
             const newValue = before + separator + text + after;
-
+            
             const lines = newValue.split("\n");
             const cleaned = cleanLines(lines);
             setTextareaValue(ta, cleaned.join("\n"));
@@ -776,7 +801,7 @@
     /** Führt ein Snippet vollständig aus: Text auflösen, einfügen, ggf. speichern. */
     async function applySnippet(sn) {
         log("applySnippet:", sn.label);
-
+        
         // Link-Snippets: sofort öffnen (kein Text in Note)
         if (sn.isLink) {
             if (!gcCode) {
@@ -1643,7 +1668,7 @@
 
         const btnBar = document.createElement("div");
         btnBar.id = "cc-snippet-btns";
-
+        
         // Normale Buttons (emoji, kein Link, kein FB)
         const normalSnippets = SNIPPETS.filter(sn => (sn.emoji || sn.image) && !sn.isLink && !sn.isFbSearch);
         normalSnippets.forEach(sn => btnBar.appendChild(buildSnippetButton(sn)));
@@ -1651,7 +1676,7 @@
         // FB-Button + Link-Buttons (neue Zeile)
         const extraSnippets = SNIPPETS.filter(sn => sn.isFbSearch || sn.isLink);
         extraSnippets.forEach(sn => btnBar.appendChild(buildSnippetButton(sn)));
-
+        
         noteWrapper.insertBefore(btnBar, container.nextSibling);
 
         updateCCBtn();
@@ -1679,10 +1704,10 @@
         const cleanBeforeSave = () => {
             const ta = DOM.note;
             if (!ta) return;
-            const cleaned = cleanLines(ta.value.split("\n"));
+            const cleaned = cleanLines(ta.value.split("\n").map(normalizeCoords));
             const cleanedText = cleaned.join("\n");
             if (cleanedText !== ta.value) {
-                debug("SaveButton-Interceptor: Leerzeilen reduziert");
+                debug("SaveButton-Interceptor: Leerzeilen reduziert / Koordinaten normalisiert");
                 setTextareaValue(ta, cleanedText);
             }
         };
