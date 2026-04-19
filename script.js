@@ -1594,6 +1594,35 @@
         debug("DOM-Monitor gestartet");
     }
 
+    /**
+     * Interceptor für Save-Button: Reduziert Leerzeilen BEVOR React speichert.
+     * - click mit capture=true: für Desktop-Browser
+     * - touchstart: für iPad/iOS (Safari verarbeitet click anders)
+     */
+    function initSaveButtonInterceptor() {
+        const saveBtn = DOM.saveBtn;
+        if (!saveBtn) return;
+
+        const cleanBeforeSave = () => {
+            const ta = DOM.note;
+            if (!ta) return;
+            const cleaned = cleanLines(ta.value.split("\n"));
+            const cleanedText = cleaned.join("\n");
+            if (cleanedText !== ta.value) {
+                debug("SaveButton-Interceptor: Leerzeilen reduziert");
+                setTextareaValue(ta, cleanedText);
+            }
+        };
+
+        // Desktop: capture=true stellt sicher, dass wir BEVOR React ausgeführt werden
+        saveBtn.addEventListener('click', cleanBeforeSave, { capture: true });
+
+        // iPad/iOS Safari: touchstart feuert noch VOR click
+        saveBtn.addEventListener('touchstart', cleanBeforeSave, { passive: true });
+
+        debug("Save-Button-Interceptor gestartet");
+    }
+
     // ════════════════════════════════════════════════════════════════════════════
     // ⭐ 19. KEYBOARD SHORTCUTS
     // ════════════════════════════════════════════════════════════════════════════
@@ -1678,6 +1707,9 @@
 
         // Observer für Save-Fehler starten (nachdem UI + Note-Section da sind)
         initSaveErrorObserver();
+
+        // Interceptor für Save-Button starten (reduziert Leerzeilen vor Speichern)
+        initSaveButtonInterceptor();
 
         // Reset-Coords-Prompt anzeigen, wenn Koordinaten korrigiert sind
         // UND die Note bereits "GEOCHECKER FALSCH" enthält
