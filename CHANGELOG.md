@@ -1,5 +1,10 @@
 # Changelog
 
+## [6.8] - 2026-04-19
+### Fixed
+- Jigidi-Message bei "UNSOLVED" nicht ausblenden
+- Hochkomma in Koordinaten entfernen
+
 ## [6.7] - 2026-04-19
 ### Fixed
 - Note nur zum Schreiben öffnen, wenn nötig

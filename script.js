@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      6.7
+// @version      6.8
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -370,7 +370,7 @@
      * Wendet exakte und Präfix-Ersetzungen auf jede Zeile an, dann cleanLines.
      */
     /** Regex zum Erkennen von Koordinatenpaaren (N/S + E/W, verschiedene Schreibweisen). */
-    const COORD_NORMALIZE_RE = /([NS])\s*(\d{1,3})\s*°?\s*(\d{1,2})\.(\d{1,6})\s*([EW])\s*(\d{1,3})\s*°?\s*(\d{1,2})\.(\d{1,6})/gi;
+    const COORD_NORMALIZE_RE = /([NS])\s*(\d{1,3})\s*°?\s*(\d{1,2})\.(\d{1,6})'?\s*([EW])\s*(\d{1,3})\s*°?\s*(\d{1,2})\.(\d{1,6})'?/gi;
 
     /**
      * Normalisiert Koordinaten in einer Zeile auf das Standardformat:
@@ -1020,18 +1020,23 @@
         { key: "GC-APPS",    msg: "⚠️ GC-Apps Checker gefunden",     match: h => h.includes("gc-apps.com") && h.includes("checker"),    copyCoords: true,  color: "#1565c0" },
         { key: "CERTITUDE",  msg: "⚠️ Certitude Checker gefunden",   match: h => h.includes("certitudes.org"),                          copyCoords: true,  color: "#1565c0" },
         { key: "CHALLENGE",  msg: "⚠️ Challenge-Link gefunden",      match: h => h.startsWith("https://project-gc.com/challenges/"),    copyCoords: false, color: "#f9a825" },
-        { key: "JIGIDI",     msg: "🧩 Jigidi-Link gefunden",         match: h => h.includes("jigidi.com/"),                             copyCoords: false, color: "#f9a825" }
+        { key: "JIGIDI",     msg: "🧩 Jigidi-Link gefunden",         match: h => h.includes("jigidi.com/"),                             copyCoords: false, color: "#f9a825",
+          // Notification nur unterdrücken wenn JIGIDI gelöst ist (kein UNSOLVED mehr)
+          suppressCheck: saved => saved.includes("JIGIDI:") && !saved.includes("JIGIDI: UNSOLVED") }
     ];
 
     /**
      * Mapping: Note-Keyword → Checker-Key.
      * Doppelte Verwendung:
      *  1. updateCheckerWarnings: Notification entfernen wenn Note-Keyword nach Speichern vorhanden
-     *  2. scanCheckers: Notification beim Laden unterdrücken (Reverse-Lookup auf Checker-Key)
+     *  2. scanCheckers: Notification beim Laden unterdrücken (Reverse-Lookup auf Checker-Key),
+     *     sofern kein suppressCheck in CHECKER_DEFS definiert ist.
      *
      * CHALLENGE ERFÜLLT → CHALLENGE (nicht "CHALLENGE" direkt!):
-     * Damit bleibt die Notification bei "CHALLENGE NICHT ERFÜLLT" bestehen,
-     * weil "CHALLENGE NICHT ERFÜLLT" ≠ "CHALLENGE ERFÜLLT".
+     * Damit bleibt die Notification bei "CHALLENGE NICHT ERFÜLLT" bestehen.
+     *
+     * JIGIDI: suppressCheck in CHECKER_DEFS übernimmt die Unterdrückung beim Laden,
+     * updateCheckerWarnings behandelt JIGIDI separat (nur entfernen wenn gelöst).
      */
     const CHECKER_KEYWORDS = {
         "GEOCHECKER":         "GEOCHECKER",
@@ -1079,13 +1084,13 @@
             if (def.key !== "JIGIDI") foundAnyChecker = true;
 
             // Notification unterdrücken wenn die Note bereits das passende Ergebnis enthält.
-            // Reverse-Lookup in CHECKER_KEYWORDS: für def.key alle Note-Keywords finden,
-            // die diesen Checker als "erledigt" markieren.
-            // Beispiel: CHALLENGE → ["CHALLENGE ERFÜLLT"] (nicht "CHALLENGE NICHT ERFÜLLT")
-            const suppressKeywords = Object.entries(CHECKER_KEYWORDS)
-                .filter(([, v]) => v === def.key)
-                .map(([k]) => k);
-            const alreadyHandled = suppressKeywords.some(kw => saved.includes(kw));
+            // suppressCheck (wenn definiert) hat Vorrang vor dem Reverse-Lookup in CHECKER_KEYWORDS.
+            const alreadyHandled = def.suppressCheck
+                ? def.suppressCheck(saved)
+                : Object.entries(CHECKER_KEYWORDS)
+                    .filter(([, v]) => v === def.key)
+                    .map(([k]) => k)
+                    .some(kw => saved.includes(kw));
 
             if (!alreadyHandled && !notified.has(def.key)) {
                 notified.add(def.key);
