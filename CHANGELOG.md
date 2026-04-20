@@ -1,6 +1,10 @@
 # Changelog
 
-## [6.8] - 2026-04-19
+## [7.0] - 2026-04-20
+### Added
+- kleines Dropdown für weitere Emojis
+
+## [6.8] - 2026-04-20
 ### Fixed
 - Jigidi-Message bei "UNSOLVED" nicht ausblenden
 - Hochkomma in Koordinaten entfernen

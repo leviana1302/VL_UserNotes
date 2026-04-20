@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      6.8
+// @version      7.0
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -632,6 +632,7 @@
      *   removeCC         – CC-Zeile (📌) am Anfang entfernen?
      *   confirmResetCoords – nach Einfügen Reset-Coords-Dialog zeigen?
      *   noBlankBefore    – true = keine Leerzeile davor einfügen (inline-Snippet)
+     *   inOverflow       – true = Button im "..."-Overflow-Dropdown statt in der Hauptleiste
      *   isLink           – true wenn Snippet ein externer Link ist
      *   linkUrl          – URL für isLink=true (Platzhalter: __GCCODE__)
      */
@@ -678,7 +679,8 @@
         { label: '👉 HINT:',    emoji: '👉', value: '👉 HINT: ' },
         { label: '🚩 WP',       emoji: '🚩', value: '🚩 WP' },
         { label: '🚗 Parken: ', emoji: '🚗', value: '🚗 Parken: ' },
-        { label: '➡️ ',               emoji: '➡️', value: '➡️', noBlankBefore: true },
+        { label: '➡️ ',        emoji: '➡️', value: '➡️', noBlankBefore: true, inOverflow: true },
+        { label: '⭐ ',        emoji: '⭐', value: '⭐',                       inOverflow: true },
         {
             label: 'Facebook-Suche',
             image: FB_LOGO,
@@ -1404,7 +1406,7 @@
                 margin-bottom: 10px;
                 justify-content: flex-start;
             }
-            #cc-snippet-btns button {
+            #cc-snippet-btns button:not(#cc-overflow-btn) {
                 position: relative;
                 flex: 0 1 calc(10% - 6px);
                 padding: 8px 12px;
@@ -1428,8 +1430,63 @@
                 padding: 8px 12px;
             }
             #cc-snippet-btns a:hover { background: #e0e0e0; }
+            /* Overflow-Dropdown ("➕"-Button) */
+            #cc-overflow-wrap {
+                position: relative;
+                flex: 0 1 calc(10% - 6px);
+                display: inline-flex;
+            }
+            #cc-overflow-btn {
+                width: 100%;
+                position: relative;
+                padding: 8px 12px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                background: #f5f5f5;
+                cursor: pointer;
+                font-size: 20px;
+                line-height: 1;
+                text-align: center;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                min-height: 36px;
+            }
+            #cc-overflow-btn:hover { background: #e0e0e0; }
             @media (max-width: 768px) {
-                #cc-snippet-btns button {
+                #cc-overflow-wrap { flex: 0 1 calc(10% - 5px); }
+                #cc-overflow-btn { padding: 14px 16px; font-size: 22px; }
+            }
+            #cc-overflow-menu {
+                display: none;
+                position: absolute;
+                top: calc(100% + 4px);
+                left: 0;
+                z-index: 999;
+                background: #fff;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                padding: 4px;
+                display: none;
+                flex-direction: column;
+                gap: 4px;
+                min-width: 60px;
+            }
+            #cc-overflow-menu.open { display: flex; }
+            #cc-overflow-menu button {
+                padding: 8px 12px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                background: #f5f5f5;
+                cursor: pointer;
+                font-size: 20px;
+                text-align: center;
+                white-space: nowrap;
+            }
+            #cc-overflow-menu button:hover { background: #e0e0e0; }
+            @media (max-width: 768px) {
+                #cc-snippet-btns button:not(#cc-overflow-btn) {
                     padding: 14px 16px;
                     font-size: 19px;
                     flex: 0 1 calc(10% - 5px);
@@ -1598,8 +1655,8 @@
         select.id = "cc-snippets";
 
         SNIPPETS.forEach(sn => {
-            // Link-Snippets nicht im Dropdown anzeigen
-            if (sn.isLink) return;
+            // Link-Snippets, FB-Suche und Overflow-Snippets nicht im Dropdown anzeigen
+            if (sn.isLink || sn.isFbSearch || sn.inOverflow) return;
 
             const opt = document.createElement("option");
             opt.textContent = sn.shortcutKey
@@ -1685,11 +1742,44 @@
         const btnBar = document.createElement("div");
         btnBar.id = "cc-snippet-btns";
 
-        // Normale Buttons (emoji, kein Link, kein FB)
-        const normalSnippets = SNIPPETS.filter(sn => (sn.emoji || sn.image) && !sn.isLink && !sn.isFbSearch);
+        // Normale Buttons (emoji, kein Link, kein FB, kein Overflow)
+        const normalSnippets = SNIPPETS.filter(sn => (sn.emoji || sn.image) && !sn.isLink && !sn.isFbSearch && !sn.inOverflow);
         normalSnippets.forEach(sn => btnBar.appendChild(buildSnippetButton(sn)));
 
-        // FB-Button + Link-Buttons (neue Zeile)
+        // "..."-Overflow-Button mit Dropdown
+        const overflowSnippets = SNIPPETS.filter(sn => sn.inOverflow);
+        if (overflowSnippets.length > 0) {
+            const wrap = document.createElement("div");
+            wrap.id = "cc-overflow-wrap";
+
+            const overflowBtn = document.createElement("button");
+            overflowBtn.id   = "cc-overflow-btn";
+            overflowBtn.type = "button";
+            overflowBtn.textContent = "➕";
+            overflowBtn.title = "Weitere Buttons";
+
+            const menu = document.createElement("div");
+            menu.id = "cc-overflow-menu";
+            overflowSnippets.forEach(sn => menu.appendChild(buildSnippetButton(sn)));
+
+            // Desktop: Mouseover öffnen/schließen
+            wrap.addEventListener("mouseenter", () => menu.classList.add("open"));
+            wrap.addEventListener("mouseleave", () => menu.classList.remove("open"));
+
+            // Mobile: Klick auf Button togglet Menü
+            overflowBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                menu.classList.toggle("open");
+            });
+            // Klick außerhalb schließt Menü
+            document.addEventListener("click", () => menu.classList.remove("open"));
+
+            wrap.appendChild(overflowBtn);
+            wrap.appendChild(menu);
+            btnBar.appendChild(wrap);
+        }
+
+        // FB-Button + Link-Buttons (zweite Zeile, sichtbar wie normale Buttons)
         const extraSnippets = SNIPPETS.filter(sn => sn.isFbSearch || sn.isLink);
         extraSnippets.forEach(sn => btnBar.appendChild(buildSnippetButton(sn)));
 
