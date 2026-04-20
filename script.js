@@ -370,7 +370,7 @@
      * Wendet exakte und Präfix-Ersetzungen auf jede Zeile an, dann cleanLines.
      */
     /** Regex zum Erkennen von Koordinatenpaaren (N/S + E/W, verschiedene Schreibweisen). */
-    const COORD_NORMALIZE_RE = /([NS])\s*(\d{1,3})\s*°?\s*(\d{1,2})\.(\d{1,6})'?\s*([EW])\s*(\d{1,3})\s*°?\s*(\d{1,2})\.(\d{1,6})'?/gi;
+    const COORD_NORMALIZE_RE = /([NS])\s*(\d{1,3})\s*°?\s*(\d{1,2})\.(\d{1,6})[′']?\s*([EW])\s*(\d{1,3})\s*°?\s*(\d{1,2})\.(\d{1,6})[′']?/gi;
 
     /**
      * Normalisiert Koordinaten in einer Zeile auf das Standardformat:
@@ -724,19 +724,19 @@
         if (snippet?.noBlankBefore) {
             activateNote();
             const pos = ta.selectionEnd || ta.value.length;
-
+            
             // Leerzeichen davor einfügen, wenn keins da ist
             let prefix = '';
             if (pos > 0 && ta.value[pos - 1] !== ' ') {
                 prefix = ' ';
             }
-
+            
             // Leerzeichen danach einfügen, wenn keins da ist
             let suffix = '';
             if (pos < ta.value.length && ta.value[pos] !== ' ') {
                 suffix = ' ';
             }
-
+            
             const fullText = prefix + text + suffix;
             ta.setRangeText(fullText, pos, pos, 'end');
             ta.dispatchEvent(new Event('input', { bubbles: true }));
@@ -779,7 +779,7 @@
 
             const separator = before.length === 0 || before.endsWith("\n") ? "" : "\n";
             const newValue = before + separator + text + after;
-
+            
             const lines = newValue.split("\n");
             const cleaned = cleanLines(lines);
             setTextareaValue(ta, cleaned.join("\n"));
@@ -1741,7 +1741,7 @@
 
         const btnBar = document.createElement("div");
         btnBar.id = "cc-snippet-btns";
-
+        
         // Normale Buttons (emoji, kein Link, kein FB, kein Overflow)
         const normalSnippets = SNIPPETS.filter(sn => (sn.emoji || sn.image) && !sn.isLink && !sn.isFbSearch && !sn.inOverflow);
         normalSnippets.forEach(sn => btnBar.appendChild(buildSnippetButton(sn)));
@@ -1782,7 +1782,7 @@
         // FB-Button + Link-Buttons (zweite Zeile, sichtbar wie normale Buttons)
         const extraSnippets = SNIPPETS.filter(sn => sn.isFbSearch || sn.isLink);
         extraSnippets.forEach(sn => btnBar.appendChild(buildSnippetButton(sn)));
-
+        
         noteWrapper.insertBefore(btnBar, container.nextSibling);
 
         updateCCBtn();

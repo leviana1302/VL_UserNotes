@@ -4,6 +4,9 @@
 ### Added
 - kleines Dropdown für weitere Emojis
 
+### Fixed
+- Koordinatenverschönerung
+
 ## [6.8] - 2026-04-20
 ### Fixed
 - Jigidi-Message bei "UNSOLVED" nicht ausblenden
