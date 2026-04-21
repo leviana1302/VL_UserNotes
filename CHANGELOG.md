@@ -1,5 +1,9 @@
 # Changelog
 
+## [7.5] - 2026-04-21
+### Added
+- bei geänderten Koordinaten Message wg. Lesezeichenliste
+
 ## [7.4] - 2026-04-21
 ### Added
 - Disclaimer ausblenden

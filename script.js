@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      7.4
+// @version      7.5
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -1965,6 +1965,72 @@
     // ⭐ 20. START PIPELINE
     // ════════════════════════════════════════════════════════════════════════════
 
+    /**
+     * Prüft ob die erste Koordinatenzeile veraltet ist.
+     * Zeigt eine rote Warnung wenn die erste Zeile eine CC-Zeile ist, aber
+     * nicht zu den aktuellen korrigierten Koordinaten passt.
+     */
+    function checkFirstCCLineOutdated() {
+        if (!cachedCoords) return;
+
+        const saved = getSavedNote();
+        const firstLine = saved.split("\n")[0];
+
+        if (!isCCLine(firstLine)) return;
+
+        // Extrahiere Koordinaten aus der Zeile (nach "📌 ")
+        const coordsInLine = firstLine.replace("📌 ", "").trim();
+
+        if (coordsInLine === cachedCoords) return;
+
+        log("Warnung: Koordinaten geändert");
+        log("  Alt:", coordsInLine);
+        log("  Neu:", cachedCoords);
+
+        const container = ensureNotificationsContainer();
+        if (!container) return warn("checkFirstCCLineOutdated: Container nicht gefunden");
+
+        const div = document.createElement("div");
+        div.id = "warn-coords-changed";
+        div.classList.add("checker-warning");
+        div.style.background = "#c62828";
+        div.style.display = "flex";
+        div.style.alignItems = "center";
+        div.style.justifyContent = "space-between";
+        div.style.gap = "12px";
+
+        // Linke Seite: Text und Koordinaten (mit Grid für Ausrichtung)
+        const textDiv = document.createElement("div");
+        textDiv.style.flex = "1";
+        textDiv.style.fontSize = "13px";
+        textDiv.style.lineHeight = "1.6";
+
+        textDiv.innerHTML = `<div style="margin-bottom: 8px;">⚠️ Koordinaten geändert! Ggf. Cache zur Bookmarkliste hinzufügen!</div>
+<div style="display: grid; grid-template-columns: 32px 1fr; gap: 8px; align-items: center;">
+  <div>Alt:</div>
+  <div>${coordsInLine}</div>
+  <div>Neu:</div>
+  <div>${cachedCoords}</div>
+</div>`;
+
+        div.appendChild(textDiv);
+
+        // Rechte Seite: Button
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "btn-add-to-list";
+        btn.setAttribute("aria-describedby", "PremiumFeatureLists");
+        btn.setAttribute("data-gcrefcode", gcCode || "");
+        btn.setAttribute("data-href", "/bookmarks/mark.aspx?view=legacy");
+        btn.textContent = "Listen";
+        btn.style.flexShrink = "0";
+        btn.style.whiteSpace = "nowrap";
+        btn.style.color = "#333";
+
+        div.appendChild(btn);
+        container.appendChild(div);
+    }
+
     /** Einmalige Start-Sequenz nach Page-Load. */
     async function runStartupPipeline() {
         await waitForSavedNoteLoaded();
@@ -1979,6 +2045,9 @@
         flushNoteChanges();
 
         addUI();
+
+        // Prüfe ob erste CC-Zeile veraltet ist
+        checkFirstCCLineOutdated();
 
         // Observer für Save-Fehler starten (nachdem UI + Note-Section da sind)
         initSaveErrorObserver();
