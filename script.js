@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      7.0
+// @version      7.1
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -235,12 +235,33 @@
         return result;
     }
 
-    /** Passt die Höhe der Textarea dynamisch an den Inhalt an. */
-    function resizeNoteTextarea(extra = 20) {
+    /** Setzt den Cursor ans Ende der Textarea. */
+    function focusAndPositionCursor() {
         const ta = DOM.note;
         if (!ta) return;
-        ta.style.height = "auto";
-        ta.style.height = (ta.scrollHeight + extra) + "px";
+        ta.focus();
+        const len = ta.value.length;
+        ta.setSelectionRange(len, len);
+    }
+
+    /** Passt die Höhe der Textarea an. */
+    function resizeNoteTextarea(extraLines = 2) {
+        const ta = DOM.note;
+        if (!ta) return;
+
+        // Aktuelle scrollHeight + 50px Zugabe
+        ta.style.height = "auto";  // Reset auf auto um scrollHeight zu berechnen
+        const scrollHeight = ta.scrollHeight;
+        const newHeight = scrollHeight + 50;
+
+        log("resizeNoteTextarea:");
+        log("  scrollHeight:", scrollHeight, "px");
+        log("  newHeight (+ 50px):", newHeight, "px");
+
+        ta.style.height = newHeight + "px";
+
+        // Cursor ans Ende für Mobile-Geräte
+        focusAndPositionCursor();
     }
 
     /** Scrollt sanft zur Textarea. */
@@ -251,7 +272,8 @@
         const viewBtn = DOM.viewBtn;
         if (!viewBtn || isNoteOpen()) return false;
         viewBtn.click();
-        setTimeout(() => resizeNoteTextarea(50), TIMINGS.resizeAfterOpen);
+        setTimeout(() => resizeNoteTextarea(2), 300);   // Erster Resize nach React-Render
+        setTimeout(() => resizeNoteTextarea(2), 600);   // Zweiter Resize für Stabilität
         return true;
     }
 
@@ -679,7 +701,8 @@
         { label: '👉 HINT:',    emoji: '👉', value: '👉 HINT: ' },
         { label: '🚩 WP',       emoji: '🚩', value: '🚩 WP' },
         { label: '🚗 Parken: ', emoji: '🚗', value: '🚗 Parken: ' },
-        { label: '➡️ ',        emoji: '➡️', value: '➡️', noBlankBefore: true, inOverflow: true },
+        { label: '→ ',          emoji: '→', value: '→', noBlankBefore: true, inOverflow: true },
+        { label: '➡️ ',         emoji: '➡️', value: '➡️', noBlankBefore: true, inOverflow: true },
         { label: '⭐ ',        emoji: '⭐', value: '⭐',                       inOverflow: true },
         {
             label: 'Facebook-Suche',
@@ -724,19 +747,19 @@
         if (snippet?.noBlankBefore) {
             activateNote();
             const pos = ta.selectionEnd || ta.value.length;
-            
+
             // Leerzeichen davor einfügen, wenn keins da ist
             let prefix = '';
             if (pos > 0 && ta.value[pos - 1] !== ' ') {
                 prefix = ' ';
             }
-            
+
             // Leerzeichen danach einfügen, wenn keins da ist
             let suffix = '';
             if (pos < ta.value.length && ta.value[pos] !== ' ') {
                 suffix = ' ';
             }
-            
+
             const fullText = prefix + text + suffix;
             ta.setRangeText(fullText, pos, pos, 'end');
             ta.dispatchEvent(new Event('input', { bubbles: true }));
@@ -779,7 +802,7 @@
 
             const separator = before.length === 0 || before.endsWith("\n") ? "" : "\n";
             const newValue = before + separator + text + after;
-            
+
             const lines = newValue.split("\n");
             const cleaned = cleanLines(lines);
             setTextareaValue(ta, cleaned.join("\n"));
@@ -1020,8 +1043,8 @@
         { key: "GEOCHECKER", msg: "⚠️ geocheck.org gefunden",        match: h => h.includes("geocheck.org"),                            copyCoords: true,  color: "#1565c0" },
         { key: "GEOCHECKER", msg: "⚠️ geotjek.dk gefunden",          match: h => h.includes("geotjek.dk"),                              copyCoords: true,  color: "#1565c0" },
         { key: "GC-APPS",    msg: "⚠️ GC-Apps Checker gefunden",     match: h => h.includes("gc-apps.com") && h.includes("checker"),    copyCoords: true,  color: "#1565c0" },
-        { key: "CERTITUDE",  msg: "⚠️ Certitude Checker gefunden",   match: h => h.includes("certitudes.org"),                          copyCoords: true,  color: "#1565c0" },
-        { key: "CHALLENGE",  msg: "⚠️ Challenge-Link gefunden",      match: h => h.startsWith("https://project-gc.com/challenges/"),    copyCoords: false, color: "#f9a825" },
+        { key: "CERTITUDE",  msg: "⚠️ Certitude Checker gefunden",   match: h => h.includes("certitudes.org"),                       copyCoords: true,  color: "#1565c0" },
+        { key: "CHALLENGE",  msg: "⚠️ Challenge-Link gefunden",      match: h => h.includes("project-gc.com/challenges/"),           copyCoords: false, color: "#f9a825" },
         { key: "JIGIDI",     msg: "🧩 Jigidi-Link gefunden",         match: h => h.includes("jigidi.com/"),                             copyCoords: false, color: "#f9a825",
           // Notification nur unterdrücken wenn JIGIDI gelöst ist (kein UNSOLVED mehr)
           suppressCheck: saved => saved.includes("JIGIDI:") && !saved.includes("JIGIDI: UNSOLVED") }
@@ -1156,9 +1179,6 @@
         const lines = note.split("\n").map(l => l.trim());
 
         for (const key of [...notified]) {
-            const keyword = CHECKER_KEYWORDS[key];
-            if (!keyword) continue;
-
             // JIGIDI: separat behandeln (nur entfernen wenn gelöst)
             if (key === "JIGIDI") {
                 const hasJigidi   = lines.some(l => l.startsWith("🧩 JIGIDI:") || l.startsWith("JIGIDI:"));
@@ -1170,7 +1190,13 @@
                 continue;
             }
 
-            if (note.includes(keyword)) {
+            // Reverse-Lookup: alle Note-Keywords finden die diesen Checker-Key als "erledigt" markieren
+            // Beispiel: "CHALLENGE" → ["CHALLENGE ERFÜLLT"] (nicht "CHALLENGE NICHT ERFÜLLT")
+            const doneKeywords = Object.entries(CHECKER_KEYWORDS)
+                .filter(([, v]) => v === key)
+                .map(([k]) => k);
+
+            if (doneKeywords.some(kw => note.includes(kw))) {
                 notified.delete(key);
                 document.getElementById("warn-" + key)?.remove();
             }
@@ -1321,6 +1347,23 @@
         });
 
         debug("Save-Error-Observer gestartet");
+    }
+
+    /**
+     * Beobachtet Öffnen/Schließen der Note-Textarea (Klick auf viewCacheNote-Button)
+     * und resized dann.
+     */
+    function initNoteOpenObserver() {
+        const viewBtn = DOM.viewBtn;
+        if (!viewBtn) return;
+
+        // Beim Klick: resize nach 300ms und 600ms
+        viewBtn.addEventListener("click", () => {
+            setTimeout(() => resizeNoteTextarea(2), 300);
+            setTimeout(() => resizeNoteTextarea(2), 600);
+        });
+
+        debug("Note-Open-Observer gestartet");
     }
 
     // ════════════════════════════════════════════════════════════════════════════
@@ -1741,7 +1784,7 @@
 
         const btnBar = document.createElement("div");
         btnBar.id = "cc-snippet-btns";
-        
+
         // Normale Buttons (emoji, kein Link, kein FB, kein Overflow)
         const normalSnippets = SNIPPETS.filter(sn => (sn.emoji || sn.image) && !sn.isLink && !sn.isFbSearch && !sn.inOverflow);
         normalSnippets.forEach(sn => btnBar.appendChild(buildSnippetButton(sn)));
@@ -1762,9 +1805,20 @@
             menu.id = "cc-overflow-menu";
             overflowSnippets.forEach(sn => menu.appendChild(buildSnippetButton(sn)));
 
-            // Desktop: Mouseover öffnen/schließen
-            wrap.addEventListener("mouseenter", () => menu.classList.add("open"));
-            wrap.addEventListener("mouseleave", () => menu.classList.remove("open"));
+            // Desktop: Mouseover öffnen/schließen (mit Delay bei Leave)
+            let closeTimeout;
+            wrap.addEventListener("mouseenter", () => {
+                clearTimeout(closeTimeout);
+                menu.classList.add("open");
+            });
+            wrap.addEventListener("mouseleave", () => {
+                closeTimeout = setTimeout(() => menu.classList.remove("open"), 200);
+            });
+            // Menü selbst: closeTimeout clearen wenn Cursor über Menü schwebt
+            menu.addEventListener("mouseenter", () => clearTimeout(closeTimeout));
+            menu.addEventListener("mouseleave", () => {
+                closeTimeout = setTimeout(() => menu.classList.remove("open"), 100);
+            });
 
             // Mobile: Klick auf Button togglet Menü
             overflowBtn.addEventListener("click", (e) => {
@@ -1782,7 +1836,7 @@
         // FB-Button + Link-Buttons (zweite Zeile, sichtbar wie normale Buttons)
         const extraSnippets = SNIPPETS.filter(sn => sn.isFbSearch || sn.isLink);
         extraSnippets.forEach(sn => btnBar.appendChild(buildSnippetButton(sn)));
-        
+
         noteWrapper.insertBefore(btnBar, container.nextSibling);
 
         updateCCBtn();
@@ -1916,6 +1970,9 @@
 
         // Observer für Save-Fehler starten (nachdem UI + Note-Section da sind)
         initSaveErrorObserver();
+
+        // Observer für Note-Öffnen starten (resize wenn Benutzer Note aufmacht)
+        initNoteOpenObserver();
 
         // Interceptor für Save-Button starten (reduziert Leerzeilen vor Speichern)
         initSaveButtonInterceptor();

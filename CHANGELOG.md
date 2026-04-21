@@ -1,5 +1,11 @@
 # Changelog
 
+## [7.1] - 2026-04-21
+### Fixed
+- Challenge-Message bei erfüllter Challenge ausblenden
+- Textarea wird beim Aktivieren nicht vergrößert
+- Fix für Mouseover bei Overflow-Dropdown
+
 ## [7.0] - 2026-04-20
 ### Added
 - kleines Dropdown für weitere Emojis
