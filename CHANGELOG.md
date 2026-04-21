@@ -1,5 +1,9 @@
 # Changelog
 
+## [7.4] - 2026-04-21
+### Added
+- Disclaimer ausblenden
+
 ## [7.3] - 2026-04-21
 ### Fixed
 - Cursor-Position beim Einfügen von Snippets korrigiert

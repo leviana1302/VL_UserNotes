@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      7.3
+// @version      7.4
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -248,16 +248,16 @@
     function resizeNoteTextarea(extraLines = 2) {
         const ta = DOM.note;
         if (!ta) return;
-        
+
         // Aktuelle scrollHeight + 50px Zugabe
         ta.style.height = "auto";  // Reset auf auto um scrollHeight zu berechnen
         const scrollHeight = ta.scrollHeight;
         const newHeight = scrollHeight + 50;
-        
+
         log("resizeNoteTextarea:");
         log("  scrollHeight:", scrollHeight, "px");
         log("  newHeight (+ 50px):", newHeight, "px");
-        
+
         ta.style.height = newHeight + "px";
     }
 
@@ -747,19 +747,19 @@
         if (snippet?.noBlankBefore) {
             activateNote();
             const pos = ta.selectionEnd || ta.value.length;
-            
+
             // Leerzeichen davor einfügen, wenn keins da ist
             let prefix = '';
             if (pos > 0 && ta.value[pos - 1] !== ' ') {
                 prefix = ' ';
             }
-            
+
             // Leerzeichen danach einfügen, wenn keins da ist
             let suffix = '';
             if (pos < ta.value.length && ta.value[pos] !== ' ') {
                 suffix = ' ';
             }
-            
+
             const fullText = prefix + text + suffix;
             ta.setRangeText(fullText, pos, pos, 'end');
             ta.dispatchEvent(new Event('input', { bubbles: true }));
@@ -802,7 +802,7 @@
 
             const separator = before.length === 0 || before.endsWith("\n") ? "" : "\n";
             const newValue = before + separator + text + after;
-            
+
             const lines = newValue.split("\n");
             const cleaned = cleanLines(lines);
             setTextareaValue(ta, cleaned.join("\n"));
@@ -1796,7 +1796,7 @@
 
         const btnBar = document.createElement("div");
         btnBar.id = "cc-snippet-btns";
-        
+
         // Normale Buttons (emoji, kein Link, kein FB, kein Overflow)
         const normalSnippets = SNIPPETS.filter(sn => (sn.emoji || sn.image) && !sn.isLink && !sn.isFbSearch && !sn.inOverflow);
         normalSnippets.forEach(sn => btnBar.appendChild(buildSnippetButton(sn)));
@@ -1848,7 +1848,7 @@
         // FB-Button + Link-Buttons (zweite Zeile, sichtbar wie normale Buttons)
         const extraSnippets = SNIPPETS.filter(sn => sn.isFbSearch || sn.isLink);
         extraSnippets.forEach(sn => btnBar.appendChild(buildSnippetButton(sn)));
-        
+
         noteWrapper.insertBefore(btnBar, container.nextSibling);
 
         updateCCBtn();
@@ -2009,6 +2009,10 @@
     }
 
     window.addEventListener("load", () => {
+        // Disclaimer sofort ausblenden (noch VOR initMobileViewport)
+        const disclaimer = document.querySelector('.Disclaimer');
+        if (disclaimer) disclaimer.style.display = 'none';
+
         // Mobile-Viewport sofort anpassen (verhindert Ruckeln)
         initMobileViewport();
         initCoordsObserver();
