@@ -1,5 +1,9 @@
 # Changelog
 
+## [7.3] - 2026-04-21
+### Fixed
+- Cursor-Position beim Einfügen von Snippets korrigiert
+
 ## [7.2] - 2026-04-21
 ### Fixed
 - Message "Integrierter Koordinatenchecker gefunden" ausblenden nach "GEOCHECKER OK"
