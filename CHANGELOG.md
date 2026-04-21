@@ -1,5 +1,9 @@
 # Changelog
 
+## [7.2] - 2026-04-21
+### Fixed
+- Message "Integrierter Koordinatenchecker gefunden" ausblenden nach "GEOCHECKER OK"
+
 ## [7.1] - 2026-04-21
 ### Fixed
 - Challenge-Message bei erfüllter Challenge ausblenden

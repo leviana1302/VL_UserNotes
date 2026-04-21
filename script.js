@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      7.1
+// @version      7.2
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -1179,6 +1179,15 @@
         const lines = note.split("\n").map(l => l.trim());
 
         for (const key of [...notified]) {
+            // INTERNAL: separat behandeln (wenn GEOCHECKER OK/FALSCH vorhanden → Notification löschen)
+            if (key === "INTERNAL") {
+                if (note.includes("GEOCHECKER")) {
+                    notified.delete(key);
+                    document.getElementById("warn-" + key)?.remove();
+                }
+                continue;
+            }
+
             // JIGIDI: separat behandeln (nur entfernen wenn gelöst)
             if (key === "JIGIDI") {
                 const hasJigidi   = lines.some(l => l.startsWith("🧩 JIGIDI:") || l.startsWith("JIGIDI:"));
