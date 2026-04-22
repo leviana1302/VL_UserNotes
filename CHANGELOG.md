@@ -1,5 +1,9 @@
 # Changelog
 
+## [7.6] - 2026-04-21
+### Added
+- "=>" wird durch "→" ersetzt
+
 ## [7.5] - 2026-04-21
 ### Added
 - bei geänderten Koordinaten Message wg. Lesezeichenliste

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      7.5
+// @version      7.6
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -444,7 +444,7 @@
                 }
             }
 
-            result.push(normalizeCoords(t));
+            result.push(normalizeCoords(t).replace(/=>/g, "→"));
         }
 
         return cleanLines(result);
@@ -701,7 +701,7 @@
         { label: '👉 HINT:',    emoji: '👉', value: '👉 HINT: ' },
         { label: '🚩 WP',       emoji: '🚩', value: '🚩 WP' },
         { label: '🚗 Parken: ', emoji: '🚗', value: '🚗 PARKEN: ' },
-        { label: '→',          emoji: '→', value: '→ ', noBlankBefore: true, inOverflow: true },
+        { label: '→',          emoji: '→', value: '→', noBlankBefore: true, inOverflow: true },
         { label: '➡️',         emoji: '➡️', value: '➡️ ', noBlankBefore: true, inOverflow: true },
         { label: '⭐',        emoji: '⭐', value: '⭐ ',                       inOverflow: true },
         {
@@ -1972,24 +1972,24 @@
      */
     function checkFirstCCLineOutdated() {
         if (!cachedCoords) return;
-
+        
         const saved = getSavedNote();
         const firstLine = saved.split("\n")[0];
-
+        
         if (!isCCLine(firstLine)) return;
-
+        
         // Extrahiere Koordinaten aus der Zeile (nach "📌 ")
         const coordsInLine = firstLine.replace("📌 ", "").trim();
-
+        
         if (coordsInLine === cachedCoords) return;
-
+        
         log("Warnung: Koordinaten geändert");
         log("  Alt:", coordsInLine);
         log("  Neu:", cachedCoords);
-
+        
         const container = ensureNotificationsContainer();
         if (!container) return warn("checkFirstCCLineOutdated: Container nicht gefunden");
-
+        
         const div = document.createElement("div");
         div.id = "warn-coords-changed";
         div.classList.add("checker-warning");
@@ -1998,13 +1998,13 @@
         div.style.alignItems = "center";
         div.style.justifyContent = "space-between";
         div.style.gap = "12px";
-
+        
         // Linke Seite: Text und Koordinaten (mit Grid für Ausrichtung)
         const textDiv = document.createElement("div");
         textDiv.style.flex = "1";
         textDiv.style.fontSize = "13px";
         textDiv.style.lineHeight = "1.6";
-
+        
         textDiv.innerHTML = `<div style="margin-bottom: 8px;">⚠️ Koordinaten geändert! Ggf. Cache zur Bookmarkliste hinzufügen!</div>
 <div style="display: grid; grid-template-columns: 32px 1fr; gap: 8px; align-items: center;">
   <div>Alt:</div>
@@ -2012,9 +2012,9 @@
   <div>Neu:</div>
   <div>${cachedCoords}</div>
 </div>`;
-
+        
         div.appendChild(textDiv);
-
+        
         // Rechte Seite: Button
         const btn = document.createElement("button");
         btn.type = "button";
@@ -2026,7 +2026,7 @@
         btn.style.flexShrink = "0";
         btn.style.whiteSpace = "nowrap";
         btn.style.color = "#333";
-
+        
         div.appendChild(btn);
         container.appendChild(div);
     }
