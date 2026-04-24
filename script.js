@@ -1096,13 +1096,13 @@
 
     /** Definitionen für Checker-Erkennung (Links + Notification-Konfiguration). */
     const CHECKER_DEFS = [
-        { key: "GEOCHECKER", msg: "ℹ️ geochecker.com gefunden",      match: h => h.includes("geochecker.com"),                          copyCoords: true,  color: "#1565c0" },
-        { key: "GEOCHECKER", msg: "ℹ️ geocheck.org gefunden",        match: h => h.includes("geocheck.org"),                            copyCoords: true,  color: "#1565c0" },
-        { key: "GEOCHECKER", msg: "ℹ️ geotjek.dk gefunden",          match: h => h.includes("geotjek.dk"),                              copyCoords: true,  color: "#1565c0" },
-        { key: "GC-APPS",    msg: "ℹ️ GC-Apps Checker gefunden",     match: h => h.includes("gc-apps.com") && h.includes("checker"),    copyCoords: true,  color: "#1565c0" },
+        { key: "GEOCHECKER", msg: "ℹ️ geochecker.com gefunden",      match: h => h.includes("geochecker.com"),                       copyCoords: true,  color: "#1565c0" },
+        { key: "GEOCHECKER", msg: "ℹ️ geocheck.org gefunden",        match: h => h.includes("geocheck.org"),                         copyCoords: true,  color: "#1565c0" },
+        { key: "GEOCHECKER", msg: "ℹ️ geotjek.dk gefunden",          match: h => h.includes("geotjek.dk"),                           copyCoords: true,  color: "#1565c0" },
+        { key: "GC-APPS",    msg: "ℹ️ GC-Apps Checker gefunden",     match: h => h.includes("gc-apps.com") && h.includes("checker"), copyCoords: true,  color: "#1565c0" },
         { key: "CERTITUDE",  msg: "ℹ️ Certitude Checker gefunden",   match: h => h.includes("certitudes.org"),                       copyCoords: true,  color: "#1565c0" },
         { key: "CHALLENGE",  msg: "ℹ️ Challenge-Link gefunden",      match: h => h.includes("project-gc.com/challenges/"),           copyCoords: false, color: "#f9a825" },
-        { key: "JIGIDI",     msg: "🧩 Jigidi-Link gefunden",         match: h => h.includes("jigidi.com/"),                             copyCoords: false, color: "#4caf50",
+        { key: "JIGIDI",     msg: "🧩 Jigidi-Link gefunden",         match: h => h.includes("jigidi.com/"),                          copyCoords: false, color: "#b6d48a",
           // Notification nur unterdrücken wenn JIGIDI gelöst ist (kein UNSOLVED mehr)
           suppressCheck: saved => saved.includes("JIGIDI:") && !saved.includes("JIGIDI: UNSOLVED") }
     ];
