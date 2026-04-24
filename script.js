@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      7.6
+// @version      7.7
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -43,7 +43,7 @@
         waitForElementMed:    1500,   // Medium Timeout
         waitForElementLong:   5000,   // Langer Timeout (z.B. Koord-Dialog)
         waitForSolution:     30000,   // Solution-Checker Response
-        startupDelay:          500,   // Pipeline-Start nach load-Event
+        startupDelay:         2000,   // Pipeline-Start nach load-Event (erhöht, um Save-Fehler zu vermeiden)
         checkerBtnDelay:       500,   // Nach CheckerButton-Klick
         viewportZoomDelay:     100    // Mobile-Zoom Delay
     };
@@ -458,9 +458,18 @@
     function isCCLine(line) {
         if (!line) return false;
         const t = line.trim();
-        return t.startsWith("📌")
-            && CC_COORD_REGEX_N.test(t)
-            && CC_COORD_REGEX_E.test(t);
+
+        // Neues Format: 📌 Koords
+        if (t.startsWith("📌") && CC_COORD_REGEX_N.test(t) && CC_COORD_REGEX_E.test(t)) {
+            return true;
+        }
+
+        // Altes Format: ~* CC: Koords *~
+        if (t.startsWith("~* CC:") && t.endsWith("*~") && (CC_COORD_REGEX_N.test(t) || CC_COORD_REGEX_E.test(t))) {
+            return true;
+        }
+
+        return false;
     }
 
     /** Formatiert "~* CC:"-Zeilen in das neue 📌-Format. */
@@ -470,6 +479,40 @@
         if (!match) return `📌 (alt) ${t}`;
         const [, north, eastPrefix, eastDegRaw, eastRest] = match;
         return `📌 ${north} ${eastPrefix} ${eastDegRaw.padStart(3, "0")}° ${eastRest}`;
+    }
+
+    /**
+     * Extrahiert die Koordinaten-Zeichenkette aus einer CC-Zeile (beide Formate).
+     * @returns {string|null} Die Koordinaten (z.B. "N 50° 42.968 E 010° 47.456") oder null
+     */
+    function extractCoordsFromCCLine(line) {
+        if (!line) return null;
+        const t = line.trim();
+
+        // Neues Format: "📌 N 50° 42.968 E 010° 47.456"
+        if (t.startsWith("📌")) {
+            return t.substring(2).trim();
+        }
+
+        // Altes Format: "~* CC: N 50° 42.968 E 10° 47.456 *~"
+        if (t.startsWith("~* CC:") && t.endsWith("*~")) {
+            return t.replace(/^~\*\s*CC:\s*/, "").replace(/\s*\*~$/, "").trim();
+        }
+
+        return null;
+    }
+
+    /**
+     * Normalisiert Koordinaten für sicheren Vergleich.
+     * Entfernt Leerzeichen und vereinheitlicht führende Nullen.
+     * @returns {string} Normalisierte Koordinaten für Vergleich
+     */
+    function normalizeCoordsForComparison(coords) {
+        if (!coords) return "";
+        return coords
+            .replace(/\s+/g, "")              // Alle Leerzeichen weg
+            .replace(/0+(?=\d+°)/g, "")      // Entferne Nullen vor Ziffern+°: 010° → 1°, 008° → 8°, 80° bleibt 80°
+            .toUpperCase();
     }
 
     /** Ersetzt die erste CC-Zeile oder fügt eine am Anfang ein. Mutiert `lines`. */
@@ -576,8 +619,9 @@
     // ════════════════════════════════════════════════════════════════════════════
 
     /**
-     * Beobachtet #uxLatLon auf Änderungen und aktualisiert Note + Dropdown.
-     * Wird einmalig beim Script-Start gestartet.
+     * Beobachtet #uxLatLon auf Änderungen und aktualisiert nur den Cache und das Dropdown-Label.
+     * KEINE automatische Änderung der Note (verursacht Save-Fehler).
+     * Die Message-Logik läuft über die Startup-Pipeline nach Hard-Reload.
      */
     function initCoordsObserver() {
         cachedCoords = getCorrectedCoords();
@@ -586,31 +630,26 @@
         const coordsEl = DOM.corrected;
         if (!coordsEl) return;
 
-        const observer = new MutationObserver(async () => {
+        const observer = new MutationObserver(() => {
             const newCoords = getCorrectedCoords();
-            if (!newCoords || newCoords === cachedCoords) return;
+            if (newCoords === cachedCoords) return;
 
-            debug("Koordinaten geändert:", newCoords);
+            debug("Koordinaten-Observer: Änderung erkannt:", { alt: cachedCoords, neu: newCoords });
             cachedCoords = newCoords;
 
             // Dropdown-Label aktualisieren (falls UI schon vorhanden)
             const falschOpt = document.querySelector('#cc-snippets [data-vl-key="falsch"]');
             if (falschOpt) {
                 const hint = falschOpt.dataset.shortcutKey ? `  [Alt+${falschOpt.dataset.shortcutKey}]` : "";
-                falschOpt.textContent = `❌ GEOCHECKER FALSCH (${newCoords})${hint}`;
+                falschOpt.textContent = `❌ GEOCHECKER FALSCH (${newCoords ?? "?"})${hint}`;
             }
-
-            // Warten, bis srOnlyCacheNote wirklich geladen ist (auf Mobile wichtig)
-            await waitForSavedNoteLoaded();
-            autoBeautifyOldNote();
-            flushNoteChanges();
         });
 
         observer.observe(coordsEl, {
             childList:     true,
             characterData: true,
             subtree:       true,
-            attributes:    true,            // iOS/Android: italic-Klasse wird per Attribut gesetzt
+            attributes:    true,
             attributeFilter: ['class']
         });
     }
@@ -945,7 +984,7 @@
             overlay.remove();
             log("Reset-Coords: bestätigt");
 
-            // CC-Zeile entfernen, falls noch vorhanden
+            // CC-Zeile aus Note entfernen, falls vorhanden
             activateNote();
             const ta = DOM.note;
             if (ta) {
@@ -971,7 +1010,25 @@
 
             if (restoreBtn) {
                 log("Reset-Coords: Wiederherstellen geklickt");
+
+                // MERKE: Aktuelle (falsche) Koords für Warnung nach Reload speichern
+                if (cachedCoords) {
+                    try {
+                        localStorage.setItem(
+                            `vl-reset-coords-warning-${gcCode}`,
+                            JSON.stringify({
+                                oldCoords: cachedCoords, // Die falschen Koords vor Reset
+                                timestamp: Date.now()
+                            })
+                        );
+                        log("Reset-Warnung in localStorage gespeichert:", cachedCoords);
+                    } catch (e) {
+                        warn("Reset-Warnung speichern fehlgeschlagen:", e);
+                    }
+                }
+
                 restoreBtn.click();
+                // Nach geocaching.com Reload: checkResetCoordsWarning() zeigt die Warnung
             } else {
                 warn("Reset-Coords: Wiederherstellen-Button nicht gefunden");
             }
@@ -1039,13 +1096,13 @@
 
     /** Definitionen für Checker-Erkennung (Links + Notification-Konfiguration). */
     const CHECKER_DEFS = [
-        { key: "GEOCHECKER", msg: "⚠️ geochecker.com gefunden",      match: h => h.includes("geochecker.com"),                          copyCoords: true,  color: "#1565c0" },
-        { key: "GEOCHECKER", msg: "⚠️ geocheck.org gefunden",        match: h => h.includes("geocheck.org"),                            copyCoords: true,  color: "#1565c0" },
-        { key: "GEOCHECKER", msg: "⚠️ geotjek.dk gefunden",          match: h => h.includes("geotjek.dk"),                              copyCoords: true,  color: "#1565c0" },
-        { key: "GC-APPS",    msg: "⚠️ GC-Apps Checker gefunden",     match: h => h.includes("gc-apps.com") && h.includes("checker"),    copyCoords: true,  color: "#1565c0" },
-        { key: "CERTITUDE",  msg: "⚠️ Certitude Checker gefunden",   match: h => h.includes("certitudes.org"),                       copyCoords: true,  color: "#1565c0" },
-        { key: "CHALLENGE",  msg: "⚠️ Challenge-Link gefunden",      match: h => h.includes("project-gc.com/challenges/"),           copyCoords: false, color: "#f9a825" },
-        { key: "JIGIDI",     msg: "🧩 Jigidi-Link gefunden",         match: h => h.includes("jigidi.com/"),                             copyCoords: false, color: "#f9a825",
+        { key: "GEOCHECKER", msg: "ℹ️ geochecker.com gefunden",      match: h => h.includes("geochecker.com"),                          copyCoords: true,  color: "#1565c0" },
+        { key: "GEOCHECKER", msg: "ℹ️ geocheck.org gefunden",        match: h => h.includes("geocheck.org"),                            copyCoords: true,  color: "#1565c0" },
+        { key: "GEOCHECKER", msg: "ℹ️ geotjek.dk gefunden",          match: h => h.includes("geotjek.dk"),                              copyCoords: true,  color: "#1565c0" },
+        { key: "GC-APPS",    msg: "ℹ️ GC-Apps Checker gefunden",     match: h => h.includes("gc-apps.com") && h.includes("checker"),    copyCoords: true,  color: "#1565c0" },
+        { key: "CERTITUDE",  msg: "ℹ️ Certitude Checker gefunden",   match: h => h.includes("certitudes.org"),                       copyCoords: true,  color: "#1565c0" },
+        { key: "CHALLENGE",  msg: "ℹ️ Challenge-Link gefunden",      match: h => h.includes("project-gc.com/challenges/"),           copyCoords: false, color: "#f9a825" },
+        { key: "JIGIDI",     msg: "🧩 Jigidi-Link gefunden",         match: h => h.includes("jigidi.com/"),                             copyCoords: false, color: "#4caf50",
           // Notification nur unterdrücken wenn JIGIDI gelöst ist (kein UNSOLVED mehr)
           suppressCheck: saved => saved.includes("JIGIDI:") && !saved.includes("JIGIDI: UNSOLVED") }
     ];
@@ -1093,7 +1150,7 @@
             if (!saved.includes("GEOCHECKER") && !notified.has("INTERNAL")) {
                 notified.add("INTERNAL");
                 showNotification(
-                    "⚠️ Integrierter Koordinatenchecker gefunden",
+                    "ℹ️ Integrierter Koordinatenchecker gefunden",
                     "warn-INTERNAL",
                     "#ctl00_ContentBody_lblSolutionChecker",
                     { key: "INTERNAL", color: "#1565c0", copyCoords: false }
@@ -1144,6 +1201,12 @@
         // Nur einfügen, wenn Cache-Typ einen Geochecker erfordert
         if (!cacheType || !GEOCACHER_REQUIRED_TYPES.has(cacheType)) {
             debug(`scanCheckers: Cache-Typ "${cacheType}" erfordert keinen Geochecker`);
+            return;
+        }
+
+        // Nur einfügen, wenn korrigierte Koordinaten vorhanden sind
+        if (!cachedCoords) {
+            debug("scanCheckers: keine korrigierten Koordinaten → KEIN GEOCHECKER nicht eingefügt");
             return;
         }
 
@@ -1242,6 +1305,12 @@
 
         let lines = ta.value.split("\n");
 
+        // ALTE erste CC-Zeile MERKEN (für Koords-Change-Warnung)
+        const oldFirstLine = lines[0];
+        const oldCoordsFromFirstLine = isCCLine(oldFirstLine)
+            ? extractCoordsFromCCLine(oldFirstLine)
+            : null;
+
         // Bei "FALSCH": alte CC-Zeile am Anfang entfernen
         if (snippet.includes("GEOCHECKER FALSCH") && isCCLine(lines[0])) {
             debug("SolutionChecker: entferne alte CC-Zeile");
@@ -1249,6 +1318,12 @@
         }
 
         lines = beautifyLines(lines);
+
+        // Stelle sicher dass eine CC-Zeile am Anfang ist (bei GEOCHECKER OK mit neuen Koords)
+        if (snippet.includes("GEOCHECKER OK") && cachedCoords && !isCCLine(lines[0])) {
+            debug("SolutionChecker OK: füge CC-Zeile mit neuen Koords am Anfang ein");
+            lines.unshift(`📌 ${cachedCoords}`);
+        }
 
         // Nach erstem Block (= erste Leerzeile) einfügen
         let i = 0;
@@ -1259,8 +1334,28 @@
 
         scrollToNote();
         writeLines(lines, true);
-        await sleep(TIMINGS.saveSettleDelay);
-        updateFirstCCLine(false);
+
+        // Nach updateFirstCCLine ggf. Koords-Change-Warnung anzeigen (nur bei OK)
+        // Bei FALSCH kommt ja showResetCoordsPrompt
+        if (snippet.includes("GEOCHECKER OK") && cachedCoords) {
+            // Es gibt NEUE Koords nach dem Checker
+            // Zeige Warnung unabhängig davon ob es vorher alte Koords gab
+
+            const oldCoords = oldCoordsFromFirstLine ?? "(keine)";
+
+            // Zeige Warnung wenn:
+            // - Es gab keine alten Koords (neue wurden gerade gefunden) → immer zeigen
+            // - ODER alte und neue sind unterschiedlich
+            const shouldShowWarning = !oldCoordsFromFirstLine ||
+                normalizeCoordsForComparison(oldCoordsFromFirstLine) !== normalizeCoordsForComparison(cachedCoords);
+
+            if (shouldShowWarning) {
+                log("SolutionChecker OK: zeige Warnung für neue Koordinaten");
+                log("  Alt:", oldCoords);
+                log("  Neu:", cachedCoords);
+                showCoordsChangedWarning(oldCoords, cachedCoords);
+            }
+        }
 
         // Reset-Coords-Prompt bei FALSCH + vorhandenen korrigierten Coords
         if (snippet.includes("GEOCHECKER FALSCH") && cachedCoords) {
@@ -1908,6 +2003,38 @@
         debug("Save-Button-Interceptor gestartet");
     }
 
+    /**
+     * Beobachtet den Wiederherstellen-Button ("Restore Coordinates").
+     * Wenn der User diesen Button klickt, speichern wir die aktuellen Koords
+     * damit nach dem Reload eine Warnung angezeigt wird.
+     */
+    function initRestoreButtonObserver() {
+        const restoreBtn = DOM.restoreBtn;
+        if (!restoreBtn) return;
+
+        restoreBtn.addEventListener("click", () => {
+            log("Restore-Button geklickt");
+
+            // Speichere aktuelle Koords BEVOR sie zurückgesetzt werden
+            if (cachedCoords) {
+                try {
+                    localStorage.setItem(
+                        `vl-reset-coords-warning-${gcCode}`,
+                        JSON.stringify({
+                            oldCoords: cachedCoords,
+                            timestamp: Date.now()
+                        })
+                    );
+                    log("Reset-Warnung in localStorage gespeichert (manueller Restore):", cachedCoords);
+                } catch (e) {
+                    warn("Reset-Warnung speichern fehlgeschlagen:", e);
+                }
+            }
+        });
+
+        debug("Restore-Button-Observer gestartet");
+    }
+
     // ════════════════════════════════════════════════════════════════════════════
     // ⭐ 19. KEYBOARD SHORTCUTS
     // ════════════════════════════════════════════════════════════════════════════
@@ -1966,30 +2093,80 @@
     // ════════════════════════════════════════════════════════════════════════════
 
     /**
-     * Prüft ob die erste Koordinatenzeile veraltet ist.
-     * Zeigt eine rote Warnung wenn die erste Zeile eine CC-Zeile ist, aber
-     * nicht zu den aktuellen korrigierten Koordinaten passt.
+     * Zeigt die "Koordinaten geändert" Warnung mit alter/neuer Koordinate.
+     *
+     * Enthält drei Elemente:
+     *  - Text mit Alt/Neu Koordinaten (links)
+     *  - "Listen"-Button für die Bookmarkliste (mitte)
+     *  - "X"-Button zum Schließen (rechts) → markiert die aktuellen Koords als "gesehen"
+     *
+     * @param {string} oldCoords Alte Koordinaten (oder "(keine)")
+     * @param {string} newCoords Neue Koordinaten (oder "(zurückgesetzt)")
      */
-    function checkFirstCCLineOutdated() {
-        if (!cachedCoords) return;
-        
-        const saved = getSavedNote();
-        const firstLine = saved.split("\n")[0];
-        
-        if (!isCCLine(firstLine)) return;
-        
-        // Extrahiere Koordinaten aus der Zeile (nach "📌 ")
-        const coordsInLine = firstLine.replace("📌 ", "").trim();
-        
-        if (coordsInLine === cachedCoords) return;
-        
-        log("Warnung: Koordinaten geändert");
-        log("  Alt:", coordsInLine);
-        log("  Neu:", cachedCoords);
-        
+
+    /**
+     * Zeigt eine rote Warnung wenn alte Koords in der Note sind, aber keine aktuellen im DOM.
+     * Beispiel: Nach Reset der Koords wurde die alte CC-Zeile nicht aus der Note entfernt.
+     */
+    function showStaleCoordsBanner(staleCoords) {
+        debug("showStaleCoordsBanner:", staleCoords);
+        document.getElementById("vl-stale-coords-banner")?.remove();
+
         const container = ensureNotificationsContainer();
-        if (!container) return warn("checkFirstCCLineOutdated: Container nicht gefunden");
-        
+        if (!container) return warn("Stale-Coords: Container nicht gefunden");
+
+        const div = document.createElement("div");
+        div.id = "vl-stale-coords-banner";
+        div.classList.add("checker-warning");
+        div.style.background = "#c62828";
+        div.style.display = "flex";
+        div.style.alignItems = "center";
+        div.style.justifyContent = "space-between";
+        div.style.gap = "12px";
+
+        // Linke Seite: Text
+        const textDiv = document.createElement("div");
+        textDiv.style.flex = "1";
+        textDiv.style.fontSize = "13px";
+        textDiv.style.lineHeight = "1.6";
+        textDiv.innerHTML = `<div>⚠️ Bitte korrigierte Koordinaten in der Notiz prüfen!</div>
+<div style="margin-top: 6px; font-size: 12px; opacity: 0.9;">${staleCoords}</div>`;
+
+        div.appendChild(textDiv);
+
+        // Rechts: X-Button
+        const btnGroup = document.createElement("div");
+        btnGroup.style.display = "flex";
+        btnGroup.style.gap = "6px";
+        btnGroup.style.flexShrink = "0";
+        btnGroup.style.alignItems = "center";
+
+        const closeBtn = document.createElement("button");
+        closeBtn.type = "button";
+        closeBtn.textContent = "✕";
+        closeBtn.title = "Warnung schließen";
+        closeBtn.style.cssText = "background:transparent;border:1px solid rgba(255,255,255,0.6);color:white;border-radius:3px;padding:2px 8px;cursor:pointer;font-weight:bold;";
+        closeBtn.addEventListener("click", () => {
+            div.remove();
+            log("Stale-Coords-Warnung geschlossen");
+        });
+
+        btnGroup.appendChild(closeBtn);
+        div.appendChild(btnGroup);
+
+        container.appendChild(div);
+        log("Stale-Coords-Warnung angezeigt:", staleCoords);
+    }
+
+    function showCoordsChangedWarning(oldCoords, newCoords) {
+        log("showCoordsChangedWarning:", { oldCoords, newCoords });
+
+        const container = ensureNotificationsContainer();
+        if (!container) return warn("showCoordsChangedWarning: Container nicht gefunden");
+
+        // Alte Warnung entfernen wenn sie schon da ist
+        document.getElementById("warn-coords-changed")?.remove();
+
         const div = document.createElement("div");
         div.id = "warn-coords-changed";
         div.classList.add("checker-warning");
@@ -1998,40 +2175,208 @@
         div.style.alignItems = "center";
         div.style.justifyContent = "space-between";
         div.style.gap = "12px";
-        
+
         // Linke Seite: Text und Koordinaten (mit Grid für Ausrichtung)
         const textDiv = document.createElement("div");
         textDiv.style.flex = "1";
         textDiv.style.fontSize = "13px";
         textDiv.style.lineHeight = "1.6";
-        
+
         textDiv.innerHTML = `<div style="margin-bottom: 8px;">⚠️ Koordinaten geändert! Ggf. Cache zur Bookmarkliste hinzufügen!</div>
 <div style="display: grid; grid-template-columns: 32px 1fr; gap: 8px; align-items: center;">
   <div>Alt:</div>
-  <div>${coordsInLine}</div>
+  <div>${oldCoords}</div>
   <div>Neu:</div>
-  <div>${cachedCoords}</div>
+  <div>${newCoords}</div>
 </div>`;
-        
+
         div.appendChild(textDiv);
-        
-        // Rechte Seite: Button
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "btn-add-to-list";
-        btn.setAttribute("aria-describedby", "PremiumFeatureLists");
-        btn.setAttribute("data-gcrefcode", gcCode || "");
-        btn.setAttribute("data-href", "/bookmarks/mark.aspx?view=legacy");
-        btn.textContent = "Listen";
-        btn.style.flexShrink = "0";
-        btn.style.whiteSpace = "nowrap";
-        btn.style.color = "#333";
-        
-        div.appendChild(btn);
+
+        // Button-Gruppe rechts
+        const btnGroup = document.createElement("div");
+        btnGroup.style.display = "flex";
+        btnGroup.style.gap = "6px";
+        btnGroup.style.flexShrink = "0";
+        btnGroup.style.alignItems = "center";
+
+        // "Listen"-Button
+        const listBtn = document.createElement("button");
+        listBtn.type = "button";
+        listBtn.className = "btn-add-to-list";
+        listBtn.setAttribute("aria-describedby", "PremiumFeatureLists");
+        listBtn.setAttribute("data-gcrefcode", gcCode || "");
+        listBtn.setAttribute("data-href", "/bookmarks/mark.aspx?view=legacy");
+        listBtn.textContent = "Listen";
+        listBtn.style.whiteSpace = "nowrap";
+        listBtn.style.color = "#333";
+        btnGroup.appendChild(listBtn);
+
+        // "X"-Button (Schließen + als gesehen markieren)
+        const closeBtn = document.createElement("button");
+        closeBtn.type = "button";
+        closeBtn.textContent = "✕";
+        closeBtn.title = "Als gelesen markieren";
+        closeBtn.style.cssText = "background:transparent;border:1px solid rgba(255,255,255,0.6);color:white;border-radius:3px;padding:2px 8px;cursor:pointer;font-weight:bold;";
+        closeBtn.addEventListener("click", () => {
+            // Aktuelle korrigierte Koords als "gesehen" markieren
+            markCoordsAsSeen();
+            div.remove();
+            log("Koords-Warnung geschlossen und als gesehen markiert");
+        });
+        btnGroup.appendChild(closeBtn);
+
+        div.appendChild(btnGroup);
         container.appendChild(div);
     }
 
-    /** Einmalige Start-Sequenz nach Page-Load. */
+    /** Markiert die aktuellen korrigierten Koordinaten als "vom User gesehen". */
+    function markCoordsAsSeen() {
+        if (!gcCode) return;
+        const coords = getCorrectedCoords();
+        try {
+            localStorage.setItem(
+                `vl-corrected-coords-${gcCode}`,
+                JSON.stringify({ coords, timestamp: Date.now() })
+            );
+            debug("Koords als gesehen markiert:", coords);
+        } catch (e) {
+            warn("markCoordsAsSeen: localStorage Fehler:", e);
+        }
+    }
+
+    /** Flag um Doppel-Warnungen zu vermeiden wenn Reset-Warnung angezeigt wurde. */
+    let resetWarningWasShown = false;
+
+    /**
+     * Prüft localStorage auf gespeicherte Reset-Warnung.
+     * Nach "Koordinaten zurücksetzen?" oder manueller Restore-Klick werden die alten Koords gespeichert,
+     * und diese Funktion zeigt die Warnung nach dem Reload mit Alt/Neu-Koords.
+     */
+    function checkResetCoordsWarning() {
+        if (!gcCode) return;
+
+        try {
+            const key = `vl-reset-coords-warning-${gcCode}`;
+            const stored = localStorage.getItem(key);
+
+            if (!stored) return;
+
+            // Sofort löschen um Doppelwarnung zu vermeiden
+            localStorage.removeItem(key);
+
+            const data = JSON.parse(stored);
+
+            // Zeige Warnung: Alt = alte falsche Koords, Neu = aktuelle (resezte) Koords
+            const currentCoords = getCorrectedCoords();
+            log("Reset-Warnung aus localStorage angezeigt", {
+                oldCoords: data.oldCoords,
+                currentCoords
+            });
+            showCoordsChangedWarning(data.oldCoords, currentCoords ?? "(zurückgesetzt)");
+            resetWarningWasShown = true;  // Flag setzen um Doppel-Warnungen zu vermeiden
+        } catch (e) {
+            warn("checkResetCoordsWarning Error:", e);
+        }
+    }
+
+    /**
+     * ZENTRALE Funktion zur Erkennung von Koordinaten-Änderungen.
+     *
+     * Logik:
+     *  1. Koordinaten aus #uxLatLon (DOM) auslesen
+     *  2. Falls keine Koords vorhanden → nichts zu tun
+     *  3. Erste Zeile der Note auslesen
+     *  4. Wenn erste Zeile eine CC-Zeile ist UND Koords identisch → alles OK
+     *  5. Wenn erste Zeile passt nicht zu DOM-Koords:
+     *     → localStorage prüfen: wurden diese Koords bereits vom User gesehen?
+     *       - Ja (localStorage === DOM-Koords) → keine Warnung
+     *       - Nein → Warnung anzeigen mit Alt/Neu
+     *
+     * @param {string} [expectedOldCoords] Optional: explizite alte Koords (z.B. vom Solution-Checker)
+     */
+    function checkAndShowCoordsChanged(expectedOldCoords = null) {
+        if (!gcCode) {
+            warn("checkAndShowCoordsChanged: gcCode nicht vorhanden");
+            return;
+        }
+
+        // 1. Aktuelle korrigierte Koords aus DOM
+        const currentCoords = getCorrectedCoords();
+        log("checkAndShowCoordsChanged: currentCoords =", currentCoords);
+
+        // Spezialfall: Keine aktuellen Koords, aber alte in der Note vorhanden
+        if (!currentCoords) {
+            const saved = getSavedNote();
+            const firstLine = saved.split("\n")[0];
+            const firstLineCoords = isCCLine(firstLine) ? extractCoordsFromCCLine(firstLine) : null;
+
+            // Nur Stale-Coords-Warnung zeigen wenn NICHT bereits eine Reset-Warnung angezeigt wurde
+            if (firstLineCoords && !resetWarningWasShown) {
+                log("  ⚠️ SPEZIALFALL: Keine aktuellen Koords, aber alte Koords in der Note!");
+                showStaleCoordsBanner(firstLineCoords);
+            }
+            return;
+        }
+
+        // 2. Erste Zeile der gespeicherten Note
+        const saved = getSavedNote();
+        const firstLine = saved.split("\n")[0];
+        log("  erste Note-Zeile:", JSON.stringify(firstLine));
+
+        // 3. Koords aus erster Zeile extrahieren (beide Formate unterstützen!)
+        let firstLineCoords = null;
+        if (isCCLine(firstLine)) {
+            firstLineCoords = extractCoordsFromCCLine(firstLine);
+            log("  Koords aus erster Zeile:", firstLineCoords);
+        } else {
+            log("  erste Zeile ist keine CC-Zeile");
+        }
+
+        // 4. Vergleich mit Normalisierung: Wenn erste Zeile passt → alles OK
+        if (firstLineCoords && normalizeCoordsForComparison(firstLineCoords) === normalizeCoordsForComparison(currentCoords)) {
+            log("  ✅ Koords passen zur ersten Zeile → keine Warnung");
+            return;
+        }
+
+        // 5. Mismatch: prüfe localStorage ("schon gesehen?")
+        let lastSeenCoords = null;
+        try {
+            const stored = localStorage.getItem(`vl-corrected-coords-${gcCode}`);
+            if (stored) {
+                lastSeenCoords = JSON.parse(stored).coords;
+            }
+        } catch (e) {
+            warn("  localStorage Lesen fehlgeschlagen:", e);
+        }
+        log("  lastSeenCoords (aus localStorage):", lastSeenCoords);
+
+        // Wenn User diese Koords schon gesehen hat (normalisiert) → keine Warnung
+        if (lastSeenCoords && normalizeCoordsForComparison(lastSeenCoords) === normalizeCoordsForComparison(currentCoords)) {
+            log("  ℹ️ Koords bereits vom User gesehen (X-Button geklickt) → keine Warnung");
+            return;
+        }
+
+        // 6. Warnung zeigen
+        const oldCoords = expectedOldCoords ?? firstLineCoords ?? lastSeenCoords ?? "(keine)";
+        log("  🚨 KOORDINATEN-ÄNDERUNG ERKANNT");
+        log("    Alt:", oldCoords);
+        log("    Neu:", currentCoords);
+        showCoordsChangedWarning(oldCoords, currentCoords);
+    }
+
+    /**
+     * Einmalige Start-Sequenz nach Page-Load.
+     *
+     * Reihenfolge:
+     *  1. Warten bis Note geladen (bereits via startupDelay + waitForSavedNoteLoaded)
+     *  2. autoBeautifyOldNote - Note aufräumen
+     *  3. updateFirstCCLine - erste Zeile ggf. aktualisieren
+     *  4. scanCheckers - Info-Messages für Geochecker/Jigidi/Challenges
+     *  5. flushNoteChanges - Änderungen speichern
+     *  6. addUI - Buttons, Snippets etc.
+     *  7. checkAndShowCoordsChanged - Warnung bei Koordinaten-Mismatch
+     *  8. Observer und Interceptoren starten
+     */
     async function runStartupPipeline() {
         await waitForSavedNoteLoaded();
 
@@ -2039,24 +2384,32 @@
         originalNoteText = getSavedNote();
         log("originalNoteText gesichert, Länge:", originalNoteText.length);
 
+        // 2. Note aufräumen
         autoBeautifyOldNote();
-        updateFirstCCLine(true);      // syncCCLineWithCorrectedCoords
+
+        // 3. erste CC-Zeile ggf. aktualisieren
+        updateFirstCCLine(true);
+
+        // 4. Checker-Messages (Info-Icons)
         scanCheckers();
+
+        // 5. Änderungen speichern
         flushNoteChanges();
 
+        // 6. UI bauen
         addUI();
 
-        // Prüfe ob erste CC-Zeile veraltet ist
-        checkFirstCCLineOutdated();
+        // 7a. Prüfe ob eine Reset-Warnung gespeichert ist (nach Koordinaten-Reset mit "Ja" oder manueller Restore-Klick)
+        checkResetCoordsWarning();
 
-        // Observer für Save-Fehler starten (nachdem UI + Note-Section da sind)
+        // 7b. Koordinaten-Warnung prüfen (Mismatch zwischen erster Note-Zeile und korrigierten Koords)
+        checkAndShowCoordsChanged();
+
+        // 8. Observer & Interceptoren
         initSaveErrorObserver();
-
-        // Observer für Note-Öffnen starten (resize wenn Benutzer Note aufmacht)
         initNoteOpenObserver();
-
-        // Interceptor für Save-Button starten (reduziert Leerzeilen vor Speichern)
         initSaveButtonInterceptor();
+        initRestoreButtonObserver();
 
         // Reset-Coords-Prompt anzeigen, wenn Koordinaten korrigiert sind
         // UND die Note bereits "GEOCHECKER FALSCH" enthält

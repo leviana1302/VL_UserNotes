@@ -1,5 +1,9 @@
 # Changelog
 
+## [7.7] - 2026-04-24
+### Changed
+- verbesserte Überwachung für korrigierte Koordinaten
+
 ## [7.6] - 2026-04-21
 ### Added
 - "=>" wird durch "→" ersetzt
