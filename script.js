@@ -1135,10 +1135,14 @@
      * Enthält auch jigidi.com-URLs die nur als Plain-Text (ohne <a>-Tag) im Listing stehen.
      */
     const checkerAnchors = (() => {
-        const result = [...document.querySelectorAll(".UserSuppliedContent a[href]")]
-            .map(a => ({ original: a.href, lower: a.href.toLowerCase() }));
+        const result  = [];
+        const seen    = new Set();
 
-        const seen    = new Set(result.map(a => a.lower));
+        for (const a of document.querySelectorAll(".UserSuppliedContent a[href]")) {
+            const lower = a.href.toLowerCase();
+            if (!seen.has(lower)) { seen.add(lower); result.push({ original: a.href, lower }); }
+        }
+
         const pattern = /https?:\/\/(?:www\.)?jigidi\.com\/\S+/gi;
         for (const el of document.querySelectorAll(".UserSuppliedContent")) {
             for (const match of el.textContent.matchAll(pattern)) {
