@@ -1,5 +1,9 @@
 # Changelog
 
+## [7.9] - 2026-04-30
+### Changed
+- Unterstützung für JIGIDI-Links ohne a-Tag
+
 ## [7.8] - 2026-04-30
 ### Changed
 - Unterstützung für mehrere JIGIDI

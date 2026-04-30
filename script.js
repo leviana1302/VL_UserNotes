@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      7.8
+// @version      7.9
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -1132,9 +1132,26 @@
      * Nur .UserSuppliedContent-Divs werden durchsucht (statt der gesamten Seite),
      * da externe Checker-Links ausschließlich dort vorkommen.
      * Einmalig gecacht — ändert sich nach Seitenload nicht.
+     * Enthält auch jigidi.com-URLs die nur als Plain-Text (ohne <a>-Tag) im Listing stehen.
      */
-    const checkerAnchors = [...document.querySelectorAll(".UserSuppliedContent a[href]")]
-        .map(a => ({ original: a.href, lower: a.href.toLowerCase() }));
+    const checkerAnchors = (() => {
+        const result = [...document.querySelectorAll(".UserSuppliedContent a[href]")]
+            .map(a => ({ original: a.href, lower: a.href.toLowerCase() }));
+
+        const seen    = new Set(result.map(a => a.lower));
+        const pattern = /https?:\/\/(?:www\.)?jigidi\.com\/\S+/gi;
+        for (const el of document.querySelectorAll(".UserSuppliedContent")) {
+            for (const match of el.textContent.matchAll(pattern)) {
+                const url   = match[0].replace(/[.,;:)>"']+$/, ""); // trailing punctuation
+                const lower = url.toLowerCase();
+                if (!seen.has(lower)) {
+                    seen.add(lower);
+                    result.push({ original: url, lower });
+                }
+            }
+        }
+        return result;
+    })();
 
     function scanCheckers() {
         log("scanCheckers");
