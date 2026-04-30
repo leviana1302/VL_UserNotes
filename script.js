@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      7.7
+// @version      7.8
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -9,7 +9,7 @@
 // @grant        none
 // @updateURL    https://github.com/leviana1302/VL_UserNotes/raw/main/script.js
 // @downloadURL  https://github.com/leviana1302/VL_UserNotes/raw/main/script.js
-// ==/UserScript==
+// ==/UserScript== 
 
 (function () {
     'use strict';
@@ -1102,9 +1102,7 @@
         { key: "GC-APPS",    msg: "ℹ️ GC-Apps Checker gefunden",     match: h => h.includes("gc-apps.com") && h.includes("checker"), copyCoords: true,  color: "#1565c0" },
         { key: "CERTITUDE",  msg: "ℹ️ Certitude Checker gefunden",   match: h => h.includes("certitudes.org"),                       copyCoords: true,  color: "#1565c0" },
         { key: "CHALLENGE",  msg: "ℹ️ Challenge-Link gefunden",      match: h => h.includes("project-gc.com/challenges/"),           copyCoords: false, color: "#f9a825" },
-        { key: "JIGIDI",     msg: "🧩 Jigidi-Link gefunden",         match: h => h.includes("jigidi.com/"),                          copyCoords: false, color: "#b6d48a",
-          // Notification nur unterdrücken wenn JIGIDI gelöst ist (kein UNSOLVED mehr)
-          suppressCheck: saved => saved.includes("JIGIDI:") && !saved.includes("JIGIDI: UNSOLVED") }
+        { key: "JIGIDI",     msg: "🧩 Jigidi-Link gefunden",         match: h => h.includes("jigidi.com/"),                          copyCoords: false, color: "#b6d48a" }
     ];
 
     /**
@@ -1117,8 +1115,8 @@
      * CHALLENGE ERFÜLLT → CHALLENGE (nicht "CHALLENGE" direkt!):
      * Damit bleibt die Notification bei "CHALLENGE NICHT ERFÜLLT" bestehen.
      *
-     * JIGIDI: suppressCheck in CHECKER_DEFS übernimmt die Unterdrückung beim Laden,
-     * updateCheckerWarnings behandelt JIGIDI separat (nur entfernen wenn gelöst).
+     * JIGIDI: wird in scanCheckers separat behandelt (multi-Link-fähig, Schlüssel JIGIDI / JIGIDI-N),
+     * updateCheckerWarnings behandelt JIGIDI / JIGIDI-N separat (nur entfernen wenn gelöst).
      */
     const CHECKER_KEYWORDS = {
         "GEOCHECKER":         "GEOCHECKER",
@@ -1158,12 +1156,14 @@
             }
         }
 
-        // Externe Checker + Jigidi-Behandlung
+        // Externe Checker (ohne JIGIDI — wird separat unten behandelt)
         for (const def of CHECKER_DEFS) {
+            if (def.key === "JIGIDI") continue;
+
             const anchor = checkerAnchors.find(a => def.match(a.lower));
             if (!anchor) continue;
 
-            if (def.key !== "JIGIDI") foundAnyChecker = true;
+            foundAnyChecker = true;
 
             // Notification unterdrücken wenn die Note bereits das passende Ergebnis enthält.
             // suppressCheck (wenn definiert) hat Vorrang vor dem Reverse-Lookup in CHECKER_KEYWORDS.
@@ -1178,20 +1178,45 @@
                 notified.add(def.key);
                 showNotification(def.msg, "warn-" + def.key, anchor.original, def);
             }
+        }
 
-            if (def.key === "JIGIDI") {
-                const working = getWorkingNote().toUpperCase();
-                if (working.includes("JIGIDI:") || working.includes("🧩 JIGIDI:")) continue;
+        // JIGIDI: alle Links einzeln behandeln (multi-Link-fähig)
+        const jigidiDef = CHECKER_DEFS.find(d => d.key === "JIGIDI");
+        if (jigidiDef) {
+            const jigidiAnchors = checkerAnchors.filter(a => jigidiDef.match(a.lower));
+            const multi = jigidiAnchors.length > 1;
+            const toInsert = [];
 
+            for (let i = 0; i < jigidiAnchors.length; i++) {
+                const anchor    = jigidiAnchors[i];
+                const notifKey  = multi ? `JIGIDI-${i + 1}` : "JIGIDI";
+                const noteLabel = multi ? `JIGIDI ${i + 1}` : "JIGIDI";
+
+                // Notification unterdrücken wenn Eintrag gelöst (in Note, aber kein UNSOLVED)
+                const alreadyHandled = saved.includes(noteLabel + ":") && !saved.includes(noteLabel + ": UNSOLVED");
+
+                if (!alreadyHandled && !notified.has(notifKey)) {
+                    notified.add(notifKey);
+                    const msg = multi ? `🧩 Jigidi-Link ${i + 1} gefunden` : jigidiDef.msg;
+                    showNotification(msg, "warn-" + notifKey, anchor.original, jigidiDef);
+                }
+
+                // UNSOLVED-Eintrag einfügen wenn noch kein JIGIDI-Eintrag vorhanden
+                if (!saved.includes(noteLabel + ":")) {
+                    toInsert.push(`🧩 ${noteLabel}: UNSOLVED`);
+                }
+            }
+
+            if (toInsert.length > 0) {
                 const coords = getCorrectedCoords();
-                if (!coords) continue;
-
-                let lines = getWorkingNote().split("\n");
-                lines = replaceCC(lines, coords);
-                lines = beautifyLines(lines);
-                if (lines.length && lines[lines.length - 1].trim() !== "") lines.push("");
-                lines.push("🧩 JIGIDI: UNSOLVED");
-                setWorkingNote(lines.join("\n"));
+                if (coords) {
+                    let lines = getWorkingNote().split("\n");
+                    lines = replaceCC(lines, coords);
+                    lines = beautifyLines(lines);
+                    if (lines.length && lines[lines.length - 1].trim() !== "") lines.push("");
+                    lines.push(...toInsert);
+                    setWorkingNote(lines.join("\n"));
+                }
             }
         }
 
@@ -1251,11 +1276,12 @@
                 continue;
             }
 
-            // JIGIDI: separat behandeln (nur entfernen wenn gelöst)
-            if (key === "JIGIDI") {
-                const hasJigidi   = lines.some(l => l.startsWith("🧩 JIGIDI:") || l.startsWith("JIGIDI:"));
-                const hasUnsolved = lines.includes("🧩 JIGIDI: UNSOLVED") || lines.includes("JIGIDI: UNSOLVED");
-                if (hasJigidi && !hasUnsolved) {
+            // JIGIDI / JIGIDI-N: separat behandeln (nur entfernen wenn der Eintrag gelöst ist)
+            if (key === "JIGIDI" || /^JIGIDI-\d+$/.test(key)) {
+                const noteLabel  = key.replace("-", " "); // "JIGIDI" bleibt, "JIGIDI-1" → "JIGIDI 1"
+                const hasEntry   = lines.some(l => l.startsWith("🧩 " + noteLabel + ":") || l.startsWith(noteLabel + ":"));
+                const hasUnsolved = lines.includes("🧩 " + noteLabel + ": UNSOLVED") || lines.includes(noteLabel + ": UNSOLVED");
+                if (hasEntry && !hasUnsolved) {
                     notified.delete(key);
                     document.getElementById("warn-" + key)?.remove();
                 }

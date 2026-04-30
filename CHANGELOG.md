@@ -1,5 +1,9 @@
 # Changelog
 
+## [7.8] - 2026-04-30
+### Changed
+- Unterstützung für mehrere JIGIDI
+
 ## [7.7] - 2026-04-24
 ### Changed
 - verbesserte Überwachung für korrigierte Koordinaten
