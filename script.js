@@ -1137,10 +1137,16 @@
     const checkerAnchors = (() => {
         const result  = [];
         const seen    = new Set();
+        // Für jigidi.com-URLs: nur ab "jigidi.com" vergleichen (Protokoll/www ignorieren)
+        const dedupeKey = lower => {
+            const idx = lower.indexOf("jigidi.com");
+            return idx !== -1 ? lower.slice(idx) : lower;
+        };
 
         for (const a of document.querySelectorAll(".UserSuppliedContent a[href]")) {
             const lower = a.href.toLowerCase();
-            if (!seen.has(lower)) { seen.add(lower); result.push({ original: a.href, lower }); }
+            const key   = dedupeKey(lower);
+            if (!seen.has(key)) { seen.add(key); result.push({ original: a.href, lower }); }
         }
 
         const pattern = /https?:\/\/(?:www\.)?jigidi\.com\/\S+/gi;
@@ -1148,8 +1154,9 @@
             for (const match of el.textContent.matchAll(pattern)) {
                 const url   = match[0].replace(/[.,;:)>"']+$/, ""); // trailing punctuation
                 const lower = url.toLowerCase();
-                if (!seen.has(lower)) {
-                    seen.add(lower);
+                const key   = dedupeKey(lower);
+                if (!seen.has(key)) {
+                    seen.add(key);
                     result.push({ original: url, lower });
                 }
             }
