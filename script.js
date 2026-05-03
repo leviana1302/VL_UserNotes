@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      7.9
+// @version      7.10
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -1149,15 +1149,25 @@
             if (!seen.has(key)) { seen.add(key); result.push({ original: a.href, lower }); }
         }
 
-        const pattern = /https?:\/\/(?:www\.)?jigidi\.com\/\S+/gi;
-        for (const el of document.querySelectorAll(".UserSuppliedContent")) {
-            for (const match of el.textContent.matchAll(pattern)) {
-                const url   = match[0].replace(/[.,;:)>"']+$/, ""); // trailing punctuation
-                const lower = url.toLowerCase();
-                const key   = dedupeKey(lower);
-                if (!seen.has(key)) {
-                    seen.add(key);
-                    result.push({ original: url, lower });
+        // Nur top-level .UserSuppliedContent scannen (keine verschachtelten, deren Text
+        // im äußeren Element bereits enthalten wäre). Text innerhalb von <a>-Tags
+        // überspringen: diese URLs sind bereits über a.href oben erfasst.
+        const pattern      = /https?:\/\/(?:www\.)?jigidi\.com\/\S+/gi;
+        const topContainers = [...document.querySelectorAll(".UserSuppliedContent")]
+            .filter(el => !el.parentElement?.closest(".UserSuppliedContent"));
+        for (const container of topContainers) {
+            const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+                acceptNode: node => node.parentElement?.closest("a")
+                    ? NodeFilter.FILTER_REJECT
+                    : NodeFilter.FILTER_ACCEPT
+            });
+            let textNode;
+            while ((textNode = walker.nextNode())) {
+                for (const match of textNode.nodeValue.matchAll(pattern)) {
+                    const url   = match[0].replace(/[.,;:)>"']+$/, ""); // trailing punctuation
+                    const lower = url.toLowerCase();
+                    const key   = dedupeKey(lower);
+                    if (!seen.has(key)) { seen.add(key); result.push({ original: url, lower }); }
                 }
             }
         }

@@ -1,5 +1,9 @@
 # Changelog
 
+## [7.10] - 2026-05-03
+### Changed
+- Verbesserung bei der JIGIDI-Prüfung
+
 ## [7.9] - 2026-04-30
 ### Changed
 - Unterstützung für JIGIDI-Links ohne a-Tag
