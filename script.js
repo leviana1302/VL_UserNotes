@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      8.1.0
+// @version      8.1
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -741,7 +741,7 @@
         { label: '👉 HINT:',    emoji: '👉', value: '👉 HINT: ' },
         { label: '🚩 WP',       emoji: '🚩', value: '🚩 WP' },
         { label: '🚗 Parken: ', emoji: '🚗', value: '🚗 PARKEN: ' },
-        { label: '→',          emoji: '→', value: '→', noBlankBefore: true, inOverflow: true },
+        { label: '→',          emoji: '→', value: '→', noBlankBefore: true },
         { label: '➡️',         emoji: '➡️', value: '➡️ ', noBlankBefore: true, inOverflow: true },
         { label: '⭐',        emoji: '⭐', value: '⭐ ',                       inOverflow: true },
         {
@@ -1581,7 +1581,8 @@
             #cc-ui-container {
                 display: flex;
                 align-items: center;
-                gap: 10px;
+                flex-wrap: wrap;
+                gap: 6px;
                 margin-bottom: 10px;
             }
             #cc-ui-version {
@@ -1591,6 +1592,11 @@
                 margin-bottom: 4px;
             }
             #cc-btn {
+                flex: 0 1 calc(100% / 11 - 6px);
+                min-height: 36px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
                 padding: 8px 12px;
                 border: 1px solid #ccc;
                 border-radius: 4px;
@@ -1613,17 +1619,9 @@
                 border: 1px solid #ccc;
                 cursor: pointer;
             }
-            #cc-snippet-btns {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 6px;
-                margin-top: 8px;
-                margin-bottom: 10px;
-                justify-content: flex-start;
-            }
-            #cc-snippet-btns button:not(#cc-overflow-btn) {
+            #cc-ui-container button:not(#cc-overflow-btn):not(#cc-btn) {
                 position: relative;
-                flex: 0 1 calc(10% - 6px);
+                flex: 0 1 calc(100% / 11 - 6px);
                 padding: 8px 12px;
                 border: 1px solid #ccc;
                 border-radius: 4px;
@@ -1638,17 +1636,17 @@
                 justify-content: center;
                 min-height: 36px;
             }
-            #cc-snippet-btns button:hover { background: #e0e0e0; }
-            #cc-snippet-btns a {
-                flex: 0 1 calc(10% - 6px);
+            #cc-ui-container button:not(#cc-btn):hover { background: #e0e0e0; }
+            #cc-ui-container a {
+                flex: 0 1 calc(100% / 11 - 6px);
                 min-height: 36px;
                 padding: 8px 12px;
             }
-            #cc-snippet-btns a:hover { background: #e0e0e0; }
+            #cc-ui-container a:hover { background: #e0e0e0; }
             /* Overflow-Dropdown ("➕"-Button) */
             #cc-overflow-wrap {
                 position: relative;
-                flex: 0 1 calc(10% - 6px);
+                flex: 0 1 calc(100% / 11 - 6px);
                 display: inline-flex;
             }
             #cc-overflow-btn {
@@ -1669,7 +1667,7 @@
             }
             #cc-overflow-btn:hover { background: #e0e0e0; }
             @media (max-width: 768px) {
-                #cc-overflow-wrap { flex: 0 1 calc(10% - 5px); }
+                #cc-overflow-wrap { flex: 0 1 calc(100% / 11 - 5px); }
                 #cc-overflow-btn { padding: 14px 16px; font-size: 22px; }
             }
             #cc-overflow-menu {
@@ -1701,10 +1699,10 @@
             }
             #cc-overflow-menu button:hover { background: #e0e0e0; }
             @media (max-width: 768px) {
-                #cc-snippet-btns button:not(#cc-overflow-btn) {
+                #cc-ui-container button:not(#cc-overflow-btn):not(#cc-btn) {
                     padding: 14px 16px;
                     font-size: 19px;
-                    flex: 0 1 calc(10% - 5px);
+                    flex: 0 1 calc(100% / 11 - 5px);
                 }
             }
             .vl-shortcut-badge {
@@ -1951,15 +1949,10 @@
         container.appendChild(buildCCButton());
         // container.appendChild(buildSnippetSelect());
 
-        noteWrapper.prepend(container);
-        noteWrapper.prepend(versionDiv);
-
-        const btnBar = document.createElement("div");
-        btnBar.id = "cc-snippet-btns";
-
+        // Snippet-Buttons direkt in den Container (eine Zeile mit Undo-Button)
         // Normale Buttons (emoji, kein Link, kein FB, kein Overflow)
         const normalSnippets = SNIPPETS.filter(sn => (sn.emoji || sn.image) && !sn.isLink && !sn.isFbSearch && !sn.inOverflow);
-        normalSnippets.forEach(sn => btnBar.appendChild(buildSnippetButton(sn)));
+        normalSnippets.forEach(sn => container.appendChild(buildSnippetButton(sn)));
 
         // "..."-Overflow-Button mit Dropdown
         const overflowSnippets = SNIPPETS.filter(sn => sn.inOverflow);
@@ -1978,6 +1971,7 @@
             overflowSnippets.forEach(sn => menu.appendChild(buildSnippetButton(sn)));
 
             // Desktop: Mouseover öffnen/schließen (mit Delay bei Leave)
+
             let closeTimeout;
             wrap.addEventListener("mouseenter", () => {
                 clearTimeout(closeTimeout);
@@ -2002,14 +1996,15 @@
 
             wrap.appendChild(overflowBtn);
             wrap.appendChild(menu);
-            btnBar.appendChild(wrap);
+            container.appendChild(wrap);
         }
 
-        // FB-Button + Link-Buttons (zweite Zeile, sichtbar wie normale Buttons)
+        // FB-Button + Link-Buttons
         const extraSnippets = SNIPPETS.filter(sn => sn.isFbSearch || sn.isLink);
-        extraSnippets.forEach(sn => btnBar.appendChild(buildSnippetButton(sn)));
+        extraSnippets.forEach(sn => container.appendChild(buildSnippetButton(sn)));
 
-        noteWrapper.insertBefore(btnBar, container.nextSibling);
+        noteWrapper.prepend(container);
+        noteWrapper.prepend(versionDiv);
 
         updateCCBtn();
 

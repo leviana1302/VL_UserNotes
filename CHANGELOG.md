@@ -1,5 +1,9 @@
 # Changelog
 
+## [8.1] - 2026-05-04
+### Changed
+- Dropdown entfernt
+
 ## [7.10] - 2026-05-03
 ### Changed
 - Verbesserung bei der JIGIDI-Prüfung
