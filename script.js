@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      7.10
+// @version      8.1.0
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -380,6 +380,7 @@
 
     /** Setzt den Arbeits-Puffer und markiert ihn als geändert. */
     function setWorkingNote(newText) {
+        if (newText === pendingNoteText) return;
         pendingNoteText = newText;
         noteDirty = true;
     }
@@ -718,7 +719,7 @@
             removeCC: true, autoSave: true, confirmResetCoords: true
         },
         { label: '❓ KEIN GEOCHECKER',              emoji: '❓', shortcutKey: '4', value: '❓ KEIN GEOCHECKER' },
-        { label: '✉️ MESSAGE:',                     emoji: '✉️', shortcutKey: '5', value: '✉️ MESSAGE:' },
+        { label: '✉️ MESSAGE:',                     emoji: '✉️', shortcutKey: '5', value: '✉️ MESSAGE:\n' },
         { label: '⚠️ OBS: Field puzzle from here!', emoji: '⚠️', shortcutKey: '6', value: '⚠️ OBS: Field puzzle from here!' },
         { label: '💡 SOLUTION:',                    emoji: '💡', shortcutKey: '7', value: '💡 SOLUTION:\n' },
         { label: '🧩 JIGIDI:',                      emoji: '🧩', shortcutKey: '8', value: '🧩 JIGIDI:\n' },
@@ -1948,7 +1949,7 @@
         const container = document.createElement("div");
         container.id = "cc-ui-container";
         container.appendChild(buildCCButton());
-        container.appendChild(buildSnippetSelect());
+        // container.appendChild(buildSnippetSelect());
 
         noteWrapper.prepend(container);
         noteWrapper.prepend(versionDiv);
@@ -2502,7 +2503,11 @@
         // Mobile-Viewport sofort anpassen (verhindert Ruckeln)
         initMobileViewport();
         initCoordsObserver();
-        setTimeout(runStartupPipeline, TIMINGS.startupDelay);
+        // Warten bis React den Save-Button gerendert hat (statt fixer Verzögerung).
+        // Fallback nach startupDelay falls der Button nie erscheint.
+        const startDeadline = setTimeout(runStartupPipeline, TIMINGS.startupDelay);
+        waitFor(() => DOM.saveBtn, { interval: 100, timeoutMs: TIMINGS.startupDelay })
+            .then(found => { if (found) { clearTimeout(startDeadline); runStartupPipeline(); } });
     });
 
     document.addEventListener("keydown", handleKeydown);
