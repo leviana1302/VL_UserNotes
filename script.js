@@ -1583,15 +1583,13 @@
                 align-items: center;
                 flex-wrap: wrap;
                 gap: 6px;
+                padding: 6px;
                 margin-bottom: 10px;
-            }
-            #cc-ui-version {
-                font-size: 10px;
-                line-height: 1;
-                opacity: 0.7;
-                margin-bottom: 4px;
+                background: white;
+                border-radius: 4px;
             }
             #cc-btn {
+                position: relative;
                 flex: 0 1 calc(100% / 11 - 6px);
                 min-height: 36px;
                 display: flex;
@@ -1612,6 +1610,17 @@
             }
             #cc-btn:hover:not(:disabled) {
                 background: #e0e0e0;
+            }
+            .cc-btn-version {
+                position: absolute;
+                bottom: 1px;
+                left: 0;
+                right: 0;
+                text-align: center;
+                font-size: 7px;
+                line-height: 1;
+                color: #888;
+                pointer-events: none;
             }
             #cc-snippets {
                 padding: 6px;
@@ -1903,9 +1912,17 @@
         const btn = document.createElement("button");
         btn.id             = "cc-btn";
         btn.type           = "button";
-        btn.dataset.vlMode = "undo";  // Immer Undo-Modus
-        btn.textContent    = "↩";     // Immer Undo-Emoji
+        btn.dataset.vlMode = "undo";
         btn.title          = "Ursprüngliche Note am Ende einfügen (ohne Speichern)";
+
+        const arrow = document.createElement("span");
+        arrow.textContent = "↩";
+        btn.appendChild(arrow);
+
+        const ver = document.createElement("span");
+        ver.className   = "cc-btn-version";
+        ver.textContent = `v${SCRIPT_VERSION}`;
+        btn.appendChild(ver);
         btn.disabled        = true;    // Grau am Anfang (disabled state)
 
         btn.addEventListener("click", async e => {
@@ -1939,10 +1956,6 @@
         if (!noteWrapper) return;
 
         injectStyles();
-
-        const versionDiv = document.createElement("div");
-        versionDiv.id = "cc-ui-version";
-        versionDiv.textContent = `v${SCRIPT_VERSION}`;
 
         const container = document.createElement("div");
         container.id = "cc-ui-container";
@@ -2004,7 +2017,6 @@
         extraSnippets.forEach(sn => container.appendChild(buildSnippetButton(sn)));
 
         noteWrapper.prepend(container);
-        noteWrapper.prepend(versionDiv);
 
         updateCCBtn();
 
