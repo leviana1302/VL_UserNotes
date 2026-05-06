@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      8.1
+// @version      8.2
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -1241,7 +1241,7 @@
                 }
 
                 // UNSOLVED-Eintrag einfügen wenn noch kein JIGIDI-Eintrag vorhanden
-                if (!saved.includes(noteLabel + ":")) {
+                if (!saved.includes(noteLabel)) {
                     toInsert.push(`🧩 ${noteLabel}: UNSOLVED`);
                 }
             }

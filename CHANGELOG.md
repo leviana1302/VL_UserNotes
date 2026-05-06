@@ -1,5 +1,9 @@
 # Changelog
 
+## [8.2] - 2026-05-04
+### Fixed
+- JIGIDI-Erkennung in Note verbessert
+
 ## [8.1] - 2026-05-04
 ### Changed
 - Dropdown entfernt
