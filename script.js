@@ -1123,7 +1123,7 @@
         { key: "GC-APPS",    msg: "ℹ️ GC-Apps Checker gefunden",     match: h => h.includes("gc-apps.com") && h.includes("checker"), copyCoords: true,  color: "#1565c0" },
         { key: "CERTITUDE",  msg: "ℹ️ Certitude Checker gefunden",   match: h => h.includes("certitudes.org"),                       copyCoords: true,  color: "#1565c0" },
         { key: "CHALLENGE",  msg: "ℹ️ Challenge-Link gefunden",      match: h => h.includes("project-gc.com/challenges/"),           copyCoords: false, color: "#f9a825" },
-        { key: "JIGIDI",     msg: "🧩 Jigidi-Link gefunden",         match: h => h.includes("jigidi.com/"),                          copyCoords: false, color: "#88d15e" }
+        { key: "JIGIDI",     msg: "🧩 Jigidi-Link gefunden",         match: h => h.includes("jigidi.com/"),                          copyCoords: false, color: "#9bd15e" }
     ];
 
     /** Gecacht – wird in scanCheckers mehrfach benötigt. */
