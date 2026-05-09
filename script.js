@@ -58,6 +58,13 @@
     /** Emojis, die kleiner dargestellt werden und Scale-Fix brauchen. */
     const SMALL_EMOJIS = new Set(["✳️", "✉️", "⚠️"]);
 
+    /** CSS-Selektoren von Seitenelementen, die ausgeblendet werden sollen. */
+    const HIDDEN_SELECTORS = [
+        "#pcn_help",
+        "#ctl00_ContentBody_advertisingWithUs",
+        ".Disclaimer"
+    ];
+
     // ════════════════════════════════════════════════════════════════════════════
     // ⭐ 2. LOGGER
     // ════════════════════════════════════════════════════════════════════════════
@@ -1116,7 +1123,7 @@
         { key: "GC-APPS",    msg: "ℹ️ GC-Apps Checker gefunden",     match: h => h.includes("gc-apps.com") && h.includes("checker"), copyCoords: true,  color: "#1565c0" },
         { key: "CERTITUDE",  msg: "ℹ️ Certitude Checker gefunden",   match: h => h.includes("certitudes.org"),                       copyCoords: true,  color: "#1565c0" },
         { key: "CHALLENGE",  msg: "ℹ️ Challenge-Link gefunden",      match: h => h.includes("project-gc.com/challenges/"),           copyCoords: false, color: "#f9a825" },
-        { key: "JIGIDI",     msg: "🧩 Jigidi-Link gefunden",         match: h => h.includes("jigidi.com/"),                          copyCoords: false, color: "#b6d48a" }
+        { key: "JIGIDI",     msg: "🧩 Jigidi-Link gefunden",         match: h => h.includes("jigidi.com/"),                          copyCoords: false, color: "#88d15e" }
     ];
 
     /** Gecacht – wird in scanCheckers mehrfach benötigt. */
@@ -1695,7 +1702,6 @@
                 #cc-overflow-btn { padding: 14px 16px; font-size: 22px; }
             }
             #cc-overflow-menu {
-                display: none;
                 position: absolute;
                 top: calc(100% + 4px);
                 left: 0;
@@ -1795,6 +1801,8 @@
                 vertical-align: middle;
             }
             #vl-copy-coords-btn:disabled, #vl-copy-gccode-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+            #uxLatLon.italic { color: #2e7d32; font-weight: bold; }
+            ${HIDDEN_SELECTORS.join(", ")} { display: none !important; }
         `;
         document.head.appendChild(style);
     }
@@ -2630,11 +2638,18 @@
         }
     }
 
-    window.addEventListener("load", () => {
-        // Disclaimer sofort ausblenden (noch VOR initMobileViewport)
-        const disclaimer = document.querySelector('.Disclaimer');
-        if (disclaimer) disclaimer.style.display = 'none';
+    /** Blendet alle HIDDEN_SELECTORS-Elemente sofort aus (vor load-Event). */
+    function hideElements() {
+        for (const sel of HIDDEN_SELECTORS) {
+            for (const el of document.querySelectorAll(sel)) {
+                el.style.display = "none";
+            }
+        }
+    }
 
+    hideElements();
+
+    window.addEventListener("load", () => {
         // Mobile-Viewport sofort anpassen (verhindert Ruckeln)
         initMobileViewport();
         initCoordsObserver();
