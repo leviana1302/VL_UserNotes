@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      8.4
+// @version      8.5
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -648,6 +648,10 @@
                 const hint = falschOpt.dataset.shortcutKey ? `  [Alt+${falschOpt.dataset.shortcutKey}]` : "";
                 falschOpt.textContent = `❌ GEOCHECKER FALSCH (${newCoords ?? "?"})${hint}`;
             }
+
+            // Copy-Button aktivieren/deaktivieren
+            const copyBtn = document.getElementById("vl-copy-coords-btn");
+            if (copyBtn) copyBtn.disabled = !newCoords;
         });
 
         observer.observe(coordsEl, {
@@ -1777,6 +1781,22 @@
             }
             #vl-char-counter.vl-warn   { color: #f57c00; }
             #vl-char-counter.vl-danger { color: #c62828; font-weight: bold; }
+            #vl-copy-coords-btn {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                margin-right: 4px;
+                padding: 1px 5px;
+                border: 1px solid #ccc;
+                border-radius: 3px;
+                background: #f5f5f5;
+                cursor: pointer;
+                font-size: 13px;
+                line-height: 1;
+                vertical-align: middle;
+            }
+            #vl-copy-coords-btn:not(:disabled):hover { background: #e0e0e0; }
+            #vl-copy-coords-btn:disabled { opacity: 0.35; cursor: not-allowed; }
         `;
         document.head.appendChild(style);
     }
@@ -2000,6 +2020,34 @@
 
         updateCharCounter();
         ta.addEventListener("input", updateCharCounter);
+    }
+
+    /** Fügt einen Copy-Button links neben den korrigierten Koordinaten ein. */
+    function initCopyCoordBtn() {
+        if (document.getElementById("vl-copy-coords-btn")) return;
+
+        const target = DOM.latLonLink ?? DOM.corrected;
+        if (!target?.parentElement) return;
+
+        const btn = document.createElement("button");
+        btn.id       = "vl-copy-coords-btn";
+        btn.type     = "button";
+        btn.title    = "Korrigierte Koordinaten kopieren";
+        btn.textContent = "📋";
+        btn.disabled = !getCorrectedCoords();
+
+        btn.addEventListener("click", e => {
+            e.preventDefault();
+            e.stopPropagation();
+            const coords = getCorrectedCoords();
+            if (!coords) return;
+            copyToClipboard(coords);
+            const prev = btn.textContent;
+            btn.textContent = "✅";
+            setTimeout(() => { btn.textContent = prev; }, 1200);
+        });
+
+        target.parentElement.insertBefore(btn, target);
     }
 
     /** Baut die komplette UI: Version, CC-Button, Dropdown, Schnellzugriff. */
@@ -2524,6 +2572,7 @@
 
         // 6. UI bauen
         addUI();
+        initCopyCoordBtn();
 
         // 7a. Prüfe ob eine Reset-Warnung gespeichert ist (nach Koordinaten-Reset mit "Ja" oder manueller Restore-Klick)
         checkResetCoordsWarning();

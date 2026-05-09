@@ -1,5 +1,9 @@
 # Changelog
 
+## [8.5] - 2026-05-09
+### Added
+- Copy-Button für korrigierte Koordinaten
+
 ## [8.4] - 2026-05-09
 ### Added
 - Zeichenzähler für Notiz
