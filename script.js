@@ -1979,7 +1979,7 @@
         const len = ta.value.length;
         const max = ta.maxLength > 0 ? ta.maxLength : null;
 
-        counter.textContent = max ? `${len} / ${max} Zeichen` : `${len} Zeichen`;
+        counter.textContent = max ? `${len}/${max} Zeichen` : `${len} Zeichen`;
         counter.className = "";
         if (max) {
             const ratio = len / max;
