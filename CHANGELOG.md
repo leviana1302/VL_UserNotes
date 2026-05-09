@@ -1,5 +1,9 @@
 # Changelog
 
+## [8.4] - 2026-05-09
+### Added
+- Zeichenzähler für Notiz
+
 ## [8.3] - 2026-05-09
 ### Changed
 - kleine Optimierungen

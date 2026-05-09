@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      8.3
+// @version      8.4
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -1768,6 +1768,15 @@
                 background: transparent;
                 color: white;
             }
+            #vl-char-counter {
+                font-size: 11px;
+                color: #999;
+                text-align: right;
+                padding: 2px 4px 0;
+                line-height: 1;
+            }
+            #vl-char-counter.vl-warn   { color: #f57c00; }
+            #vl-char-counter.vl-danger { color: #c62828; font-weight: bold; }
         `;
         document.head.appendChild(style);
     }
@@ -1960,6 +1969,39 @@
         return btn;
     }
 
+    /** Aktualisiert den Zeichenzähler unter der Textarea. */
+    function updateCharCounter() {
+        const counter = document.getElementById("vl-char-counter");
+        if (!counter) return;
+        const ta = DOM.note;
+        if (!ta) return;
+
+        const len = ta.value.length;
+        const max = ta.maxLength > 0 ? ta.maxLength : null;
+
+        counter.textContent = max ? `${len} / ${max} Zeichen` : `${len} Zeichen`;
+        counter.className = "";
+        if (max) {
+            const ratio = len / max;
+            if (ratio > 0.9)      counter.className = "vl-danger";
+            else if (ratio > 0.7) counter.className = "vl-warn";
+        }
+    }
+
+    /** Fügt den Zeichenzähler einmalig direkt nach der Textarea ein. */
+    function initCharCounter() {
+        if (document.getElementById("vl-char-counter")) return;
+        const ta = DOM.note;
+        if (!ta?.parentElement) return;
+
+        const counter = document.createElement("div");
+        counter.id = "vl-char-counter";
+        ta.parentElement.insertBefore(counter, ta.nextSibling);
+
+        updateCharCounter();
+        ta.addEventListener("input", updateCharCounter);
+    }
+
     /** Baut die komplette UI: Version, CC-Button, Dropdown, Schnellzugriff. */
     function addUI() {
         if (document.getElementById("cc-ui-container")) return;
@@ -2030,6 +2072,7 @@
         noteWrapper.prepend(container);
 
         updateCCBtn();
+        initCharCounter();
 
         // updateCCBtn bei Änderungen in der Textarea (statt Polling)
         DOM.note?.addEventListener('input', updateCCBtn);
