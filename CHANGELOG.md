@@ -2,7 +2,7 @@
 
 ## [8.5] - 2026-05-09
 ### Added
-- Copy-Button für korrigierte Koordinaten
+- Copy-Button für korrigierte Koordinaten und GC-Code
 
 ## [8.4] - 2026-05-09
 ### Added

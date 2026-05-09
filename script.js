@@ -1781,7 +1781,7 @@
             }
             #vl-char-counter.vl-warn   { color: #f57c00; }
             #vl-char-counter.vl-danger { color: #c62828; font-weight: bold; }
-            #vl-copy-coords-btn {
+            #vl-copy-coords-btn, #vl-copy-gccode-btn {
                 display: inline-flex;
                 align-items: center;
                 justify-content: center;
@@ -1794,7 +1794,7 @@
                 line-height: 1;
                 vertical-align: middle;
             }
-            #vl-copy-coords-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+            #vl-copy-coords-btn:disabled, #vl-copy-gccode-btn:disabled { opacity: 0.3; cursor: not-allowed; }
         `;
         document.head.appendChild(style);
     }
@@ -2040,6 +2040,32 @@
             const coords = getCorrectedCoords();
             if (!coords) return;
             copyToClipboard(coords);
+            const prev = btn.textContent;
+            btn.textContent = "✅";
+            setTimeout(() => { btn.textContent = prev; }, 1200);
+        });
+
+        target.parentElement.insertBefore(btn, target);
+    }
+
+    /** Fügt einen Copy-Button links neben dem GC-Code ein. */
+    function initCopyGcCodeBtn() {
+        if (document.getElementById("vl-copy-gccode-btn")) return;
+        if (!gcCode) return;
+
+        const target = document.getElementById("ctl00_ContentBody_CoordInfoLinkControl1_uxCoordInfoCode");
+        if (!target?.parentElement) return;
+
+        const btn = document.createElement("button");
+        btn.id          = "vl-copy-gccode-btn";
+        btn.type        = "button";
+        btn.title       = "GC-Code kopieren";
+        btn.textContent = "📋";
+
+        btn.addEventListener("click", e => {
+            e.preventDefault();
+            e.stopPropagation();
+            copyToClipboard(gcCode);
             const prev = btn.textContent;
             btn.textContent = "✅";
             setTimeout(() => { btn.textContent = prev; }, 1200);
@@ -2571,6 +2597,7 @@
         // 6. UI bauen
         addUI();
         initCopyCoordBtn();
+        initCopyGcCodeBtn();
 
         // 7a. Prüfe ob eine Reset-Warnung gespeichert ist (nach Koordinaten-Reset mit "Ja" oder manueller Restore-Klick)
         checkResetCoordsWarning();
