@@ -1785,18 +1785,16 @@
                 display: inline-flex;
                 align-items: center;
                 justify-content: center;
-                margin-right: 4px;
-                padding: 1px 5px;
-                border: 1px solid #ccc;
-                border-radius: 3px;
-                background: #f5f5f5;
+                margin-right: 2px;
+                padding: 0;
+                border: none;
+                background: transparent;
                 cursor: pointer;
-                font-size: 13px;
+                font-size: 14px;
                 line-height: 1;
                 vertical-align: middle;
             }
-            #vl-copy-coords-btn:not(:disabled):hover { background: #e0e0e0; }
-            #vl-copy-coords-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+            #vl-copy-coords-btn:disabled { opacity: 0.3; cursor: not-allowed; }
         `;
         document.head.appendChild(style);
     }
