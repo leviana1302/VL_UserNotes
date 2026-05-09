@@ -1,5 +1,9 @@
 # Changelog
 
+## [8.3] - 2026-05-09
+### Changed
+- kleine Optimierungen
+
 ## [8.2] - 2026-05-04
 ### Fixed
 - JIGIDI-Erkennung in Note verbessert

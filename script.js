@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      8.2
+// @version      8.3
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -62,8 +62,10 @@
     // ⭐ 2. LOGGER
     // ════════════════════════════════════════════════════════════════════════════
 
+    const DEBUG = false;
+
     const log   = (...args) => console.log("[VL]",   ...args);
-    const debug = (...args) => console.debug("[VL]", ...args);
+    const debug = DEBUG ? (...args) => console.debug("[VL]", ...args) : () => {};
     const warn  = (...args) => console.warn("[VL]",  ...args);
 
     log(`=== ${SCRIPT_NAME} ${SCRIPT_VERSION} gestartet ===`);
@@ -146,6 +148,11 @@
     /** Schläft `ms` Millisekunden. */
     const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
+    /** Gecachter nativer Setter – einmal abgerufen, nie verändert. */
+    const _nativeTextareaSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLTextAreaElement.prototype, 'value'
+    ).set;
+
     /**
      * Setzt den Wert einer Textarea React-kompatibel.
      * Verwendet den nativen HTMLTextAreaElement.value-Setter, damit React
@@ -154,10 +161,7 @@
      */
     function setTextareaValue(ta, text) {
         if (!ta) return;
-        const nativeSetter = Object.getOwnPropertyDescriptor(
-            window.HTMLTextAreaElement.prototype, 'value'
-        ).set;
-        nativeSetter.call(ta, text);
+        _nativeTextareaSetter.call(ta, text);
         ta.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
@@ -766,6 +770,11 @@
         }
     ];
 
+    /** O(1)-Lookup für Alt+Zahl-Shortcuts im Keydown-Handler. */
+    const SNIPPET_SHORTCUT_MAP = new Map(
+        SNIPPETS.filter(s => s.shortcutKey).map(s => [s.shortcutKey, s])
+    );
+
     // ════════════════════════════════════════════════════════════════════════════
     // ⭐ 13. SNIPPET ENGINE
     // ════════════════════════════════════════════════════════════════════════════
@@ -1106,6 +1115,9 @@
         { key: "JIGIDI",     msg: "🧩 Jigidi-Link gefunden",         match: h => h.includes("jigidi.com/"),                          copyCoords: false, color: "#b6d48a" }
     ];
 
+    /** Gecacht – wird in scanCheckers mehrfach benötigt. */
+    const JIGIDI_DEF = CHECKER_DEFS.find(d => d.key === "JIGIDI");
+
     /**
      * Mapping: Note-Keyword → Checker-Key.
      * Doppelte Verwendung:
@@ -1220,9 +1232,8 @@
         }
 
         // JIGIDI: alle Links einzeln behandeln (multi-Link-fähig)
-        const jigidiDef = CHECKER_DEFS.find(d => d.key === "JIGIDI");
-        if (jigidiDef) {
-            const jigidiAnchors = checkerAnchors.filter(a => jigidiDef.match(a.lower));
+        if (JIGIDI_DEF) {
+            const jigidiAnchors = checkerAnchors.filter(a => JIGIDI_DEF.match(a.lower));
             const multi = jigidiAnchors.length > 1;
             const toInsert = [];
 
@@ -1236,8 +1247,8 @@
 
                 if (!alreadyHandled && !notified.has(notifKey)) {
                     notified.add(notifKey);
-                    const msg = multi ? `🧩 Jigidi-Link ${i + 1} gefunden` : jigidiDef.msg;
-                    showNotification(msg, "warn-" + notifKey, anchor.original, jigidiDef);
+                    const msg = multi ? `🧩 Jigidi-Link ${i + 1} gefunden` : JIGIDI_DEF.msg;
+                    showNotification(msg, "warn-" + notifKey, anchor.original, JIGIDI_DEF);
                 }
 
                 // UNSOLVED-Eintrag einfügen wenn noch kein JIGIDI-Eintrag vorhanden
@@ -2126,7 +2137,7 @@
         if (e.altKey && !e.ctrlKey && !e.shiftKey) {
             const digitMatch = e.code?.match(/^(?:Digit|Numpad)(\d)$/);
             if (digitMatch) {
-                const sn = SNIPPETS.find(s => s.shortcutKey === digitMatch[1]);
+                const sn = SNIPPET_SHORTCUT_MAP.get(digitMatch[1]);
                 if (sn) {
                     e.preventDefault();
                     log(`Shortcut Alt+${digitMatch[1]} → ${sn.label}`);
