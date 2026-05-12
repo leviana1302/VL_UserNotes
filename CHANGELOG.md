@@ -1,5 +1,9 @@
 # Changelog
 
+## [8.7] - 2026-05-12
+### Changed
+- kleine Optimierungen
+
 ## [8.6] - 2026-05-12
 ### Fixed
 - Position Geochecker-Snippets korrigiert

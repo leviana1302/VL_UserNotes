@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      8.6
+// @version      8.7
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -200,10 +200,12 @@
         return container;
     }
 
+    const pad = (n, len) => String(n).padStart(len, "0");
+
     /** Heutiges Datum im Format dd.mm.yyyy. */
     const getTodayStr = () => {
         const t = new Date();
-        return `${String(t.getDate()).padStart(2, "0")}.${String(t.getMonth() + 1).padStart(2, "0")}.${t.getFullYear()}`;
+        return `${pad(t.getDate(), 2)}.${pad(t.getMonth() + 1, 2)}.${t.getFullYear()}`;
     };
 
     /** Cache-Typen, bei denen "KEIN GEOCHECKER" eingefügt werden soll. */
@@ -421,10 +423,10 @@
         return line.replace(
             COORD_NORMALIZE_RE,
             (_, ns, latDeg, latMin, latDec, ew, lonDeg, lonMin, lonDec) => {
-                const latD = String(parseInt(latDeg, 10)).padStart(2, '0');
-                const lonD = String(parseInt(lonDeg, 10)).padStart(3, '0');
-                const latM = String(parseInt(latMin, 10)).padStart(2, '0');
-                const lonM = String(parseInt(lonMin, 10)).padStart(2, '0');
+                const latD = pad(parseInt(latDeg, 10), 2);
+                const lonD = pad(parseInt(lonDeg, 10), 3);
+                const latM = pad(parseInt(latMin, 10), 2);
+                const lonM = pad(parseInt(lonMin, 10), 2);
                 const latF = latDec.slice(0, 3).padEnd(3, '0');
                 const lonF = lonDec.slice(0, 3).padEnd(3, '0');
                 return `${ns.toUpperCase()} ${latD}° ${latM}.${latF} ${ew.toUpperCase()} ${lonD}° ${lonM}.${lonF}`;
@@ -486,7 +488,7 @@
 
     /** Formatiert "~* CC:"-Zeilen in das neue 📌-Format. */
     function formatOldCC(line) {
-        const t = line.replace(/^~\* CC:\s*/, "").replace(/\s*~\*$/, "").trim();
+        const t = line.replace(/^~\*\s*CC:\s*/, "").replace(/\s*\*~$/, "").trim();
         const match = t.match(/(N\s*\d+°\s*\d+\.\d+)\s+(E)\s*(\d+)°\s*(\d+\.\d+)/i);
         if (!match) return `📌 (alt) ${t}`;
         const [, north, eastPrefix, eastDegRaw, eastRest] = match;
@@ -642,6 +644,9 @@
         const coordsEl = DOM.corrected;
         if (!coordsEl) return;
 
+        const falschOpt = document.querySelector('#cc-snippets [data-vl-key="falsch"]');
+        const copyBtn   = document.getElementById("vl-copy-coords-btn");
+
         const observer = new MutationObserver(() => {
             const newCoords = getCorrectedCoords();
             if (newCoords === cachedCoords) return;
@@ -650,14 +655,12 @@
             cachedCoords = newCoords;
 
             // Dropdown-Label aktualisieren (falls UI schon vorhanden)
-            const falschOpt = document.querySelector('#cc-snippets [data-vl-key="falsch"]');
             if (falschOpt) {
                 const hint = falschOpt.dataset.shortcutKey ? `  [Alt+${falschOpt.dataset.shortcutKey}]` : "";
                 falschOpt.textContent = `❌ GEOCHECKER FALSCH (${newCoords ?? "?"})${hint}`;
             }
 
             // Copy-Button aktivieren/deaktivieren
-            const copyBtn = document.getElementById("vl-copy-coords-btn");
             if (copyBtn) copyBtn.disabled = !newCoords;
         });
 
@@ -754,11 +757,11 @@
         },
         { label: '🔒 CODE:',    emoji: '🔒', value: '🔒 CODE: ' },
         { label: '👉 HINT:',    emoji: '👉', value: '👉 HINT: ' },
-        { label: '🚩 WP',       emoji: '🚩', value: '🚩 WP' },
+        { label: '🚩 WP',       emoji: '🚩', value: '🚩 ' },
         { label: '🚗 Parken: ', emoji: '🚗', value: '🚗 PARKEN: ' },
-        { label: '→',          emoji: '→', value: '→', noBlankBefore: true },
-        { label: '➡️',         emoji: '➡️', value: '➡️ ', noBlankBefore: true, inOverflow: true },
-        { label: '⭐',        emoji: '⭐', value: '⭐ ',                       inOverflow: true },
+        { label: '→',           emoji: '→',   value: '→', noBlankBefore: true },
+        { label: '➡️',          emoji: '➡️', value: '➡️ ', noBlankBefore: true, inOverflow: true },
+        { label: '⭐',          emoji: '⭐', value: '⭐ ',                       inOverflow: true },
         {
             label: 'Facebook-Suche',
             image: FB_LOGO,
