@@ -755,11 +755,11 @@
             value: `⛔ CHALLENGE NICHT ERFÜLLT (${getTodayStr()})`,
             autoSave: true
         },
-        { label: '🔒 CODE:',    emoji: '🔒', value: '🔒 CODE: ' },
-        { label: '👉 HINT:',    emoji: '👉', value: '👉 HINT: ' },
-        { label: '🚩 WP',       emoji: '🚩', value: '🚩 ' },
-        { label: '🚗 Parken: ', emoji: '🚗', value: '🚗 PARKEN: ' },
-        { label: '→',           emoji: '→',   value: '→', noBlankBefore: true },
+        { label: '🔒 CODE:',    emoji: '🔒', value: '🔒 CODE: ', shortcutKey: 'c' },
+        { label: '👉 HINT:',    emoji: '👉', value: '👉 HINT: ', shortcutKey: 'h' },
+        { label: '🚩 WP',       emoji: '🚩', value: '🚩 ', shortcutKey: 'w' },
+        { label: '🚗 Parken: ', emoji: '🚗', value: '🚗 PARKEN: ', shortcutKey: 'p' },
+        { label: '→',           emoji: '→',   value: '→', shortcutKey: 'a', noBlankBefore: true },
         { label: '➡️',          emoji: '➡️', value: '➡️ ', noBlankBefore: true, inOverflow: true },
         { label: '⭐',          emoji: '⭐', value: '⭐ ',                       inOverflow: true },
         {
@@ -2256,14 +2256,16 @@
             return;
         }
 
-        // Alt+Zahl → Snippet per Tastenkürzel
+        // Alt+Zahl / Alt+Buchstabe → Snippet per Tastenkürzel
         if (e.altKey && !e.ctrlKey && !e.shiftKey) {
-            const digitMatch = e.code?.match(/^(?:Digit|Numpad)(\d)$/);
-            if (digitMatch) {
-                const sn = SNIPPET_SHORTCUT_MAP.get(digitMatch[1]);
+            const digitMatch  = e.code?.match(/^(?:Digit|Numpad)(\d)$/);
+            const letterMatch = e.code?.match(/^Key([A-Z])$/);
+            const lookupKey   = digitMatch?.[1] ?? letterMatch?.[1].toLowerCase();
+            if (lookupKey) {
+                const sn = SNIPPET_SHORTCUT_MAP.get(lookupKey);
                 if (sn) {
                     e.preventDefault();
-                    log(`Shortcut Alt+${digitMatch[1]} → ${sn.label}`);
+                    log(`Shortcut Alt+${lookupKey} → ${sn.label}`);
                     await applySnippet(sn);
                 }
             }
