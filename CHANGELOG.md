@@ -1,5 +1,9 @@
 # Changelog
 
+## [8.6] - 2026-05-12
+### Fixed
+- Position Geochecker-Snippets korrigiert
+
 ## [8.5] - 2026-05-09
 ### Added
 - Copy-Button für korrigierte Koordinaten und GC-Code

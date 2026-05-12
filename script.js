@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      8.5
+// @version      8.6
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -829,18 +829,15 @@
 
         const isGeoChecker = text.includes("GEOCHECKER OK") || text.includes("GEOCHECKER FALSCH");
 
-        // Fall A: GeoChecker-Snippet → nach erstem Block (= erste Leerzeile)
+        // Fall A: GeoChecker-Snippet → immer nach der 📌 CC-Zeile (Position 2)
         if (isGeoChecker) {
             const lines = ta.value.split("\n");
-            let i = 0;
-            while (i < lines.length && lines[i].trim() !== "") i++;
-
-            if (i === lines.length) {
-                lines.push("", text);
+            const ccIdx = lines.findIndex(l => isCCLine(l));
+            if (ccIdx >= 0) {
+                lines.splice(ccIdx + 1, 0, text);
             } else {
-                lines.splice(i + 1, 0, text);
+                lines.unshift(text);
             }
-
             const cleaned = cleanLines(lines);
             setTextareaValue(ta, cleaned.join("\n"));
             ta.setSelectionRange(ta.value.length, ta.value.length);
