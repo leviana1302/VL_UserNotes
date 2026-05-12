@@ -827,7 +827,7 @@
             return;
         }
 
-        const isGeoChecker = text.includes("GEOCHECKER OK") || text.includes("GEOCHECKER FALSCH");
+        const isGeoChecker = text.includes("GEOCHECKER OK") || text.includes("GEOCHECKER FALSCH") || text.includes("KEIN GEOCHECKER");
 
         // Fall A: GeoChecker-Snippet → immer nach der 📌 CC-Zeile (Position 2)
         if (isGeoChecker) {
