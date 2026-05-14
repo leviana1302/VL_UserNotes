@@ -258,7 +258,7 @@
     }
 
     /** Passt die Höhe der Textarea an. */
-    function resizeNoteTextarea(extraLines = 2) {
+    function resizeNoteTextarea() {
         const ta = DOM.note;
         if (!ta) return;
 
@@ -282,9 +282,9 @@
         const viewBtn = DOM.viewBtn;
         if (!viewBtn || isNoteOpen()) return false;
         viewBtn.click();
-        setTimeout(() => resizeNoteTextarea(2), 300);   // Erster Resize nach React-Render
+        setTimeout(() => resizeNoteTextarea(), 300);   // Erster Resize nach React-Render
         setTimeout(() => {
-            resizeNoteTextarea(2);                       // Zweiter Resize für Stabilität
+            resizeNoteTextarea();                       // Zweiter Resize für Stabilität
             focusAndPositionCursor();                    // Cursor ans Ende beim Öffnen
         }, 600);
         return true;
@@ -381,7 +381,7 @@
     }
 
     // ════════════════════════════════════════════════════════════════════════════
-    // ⭐ 8. WORKING-NOTE (Pufferverwaltung)
+    // ⭐ 7. WORKING-NOTE (Pufferverwaltung)
     // ════════════════════════════════════════════════════════════════════════════
 
     /** Liefert den Arbeits-Puffer (lädt ihn bei Bedarf aus der gespeicherten Note). */
@@ -399,12 +399,9 @@
     }
 
     // ════════════════════════════════════════════════════════════════════════════
-    // ⭐ 9. BEAUTIFY ENGINE
+    // ⭐ 8. BEAUTIFY ENGINE
     // ════════════════════════════════════════════════════════════════════════════
 
-    /**
-     * Wendet exakte und Präfix-Ersetzungen auf jede Zeile an, dann cleanLines.
-     */
     /** Regex zum Erkennen von Koordinatenpaaren (N/S + E/W, verschiedene Schreibweisen). */
     const COORD_NORMALIZE_RE = /([NS])\s*(\d{1,3})\s*°?\s*(\d{1,2})\.(\d{1,6})[′']?\s*([EW])\s*(\d{1,3})\s*°?\s*(\d{1,2})\.(\d{1,6})[′']?/gi;
 
@@ -465,7 +462,7 @@
     }
 
     // ════════════════════════════════════════════════════════════════════════════
-    // ⭐ 10. CC ENGINE (Koordinaten-Logik)
+    // ⭐ 9. CC ENGINE (Koordinaten-Logik)
     // ════════════════════════════════════════════════════════════════════════════
 
     /** Prüft, ob eine Zeile eine gültige CC-Zeile (📌 + N/E-Koords) ist. */
@@ -613,11 +610,11 @@
     }
 
     // ════════════════════════════════════════════════════════════════════════════
-    // ⭐ 11. KOORDINATEN-OBSERVER (live-Update bei Änderung)
+    // ⭐ 10. KOORDINATEN-OBSERVER (live-Update bei Änderung)
     // ════════════════════════════════════════════════════════════════════════════
 
     /**
-     * Beobachtet #uxLatLon auf Änderungen und aktualisiert nur den Cache und das Dropdown-Label.
+     * Beobachtet #uxLatLon auf Änderungen und aktualisiert den Koordinaten-Cache.
      * KEINE automatische Änderung der Note (verursacht Save-Fehler).
      * Die Message-Logik läuft über die Startup-Pipeline nach Hard-Reload.
      */
@@ -654,7 +651,7 @@
     }
 
     // ════════════════════════════════════════════════════════════════════════════
-    // ⭐ 12. SNIPPET-DEFINITIONEN & BEAUTIFY-REGELN
+    // ⭐ 11. SNIPPET-DEFINITIONEN & BEAUTIFY-REGELN
     // ════════════════════════════════════════════════════════════════════════════
 
     /** Exakte Ersetzungen für Beautify (getrimmte komplette Zeile → Ersatz). */
@@ -769,7 +766,7 @@
     );
 
     // ════════════════════════════════════════════════════════════════════════════
-    // ⭐ 13. SNIPPET ENGINE
+    // ⭐ 12. SNIPPET ENGINE
     // ════════════════════════════════════════════════════════════════════════════
 
     /**
@@ -866,7 +863,6 @@
         setTimeout(() => ta.focus(), 10);
     }
 
-    /** Führt ein Snippet vollständig aus: Text auflösen, einfügen, ggf. speichern. */
     /** Öffnet einen externen Link (isLink-Snippet). */
     function applyLinkSnippet(sn) {
         if (!gcCode) { showNotification("GC-Code nicht gefunden."); return; }
@@ -890,7 +886,7 @@
         document.body.removeChild(a);
     }
 
-    /** Löst __COORDS__-Platzhalter auf und aktualisiert ggf. das Dropdown-Label. */
+    /** Löst __COORDS__-Platzhalter auf. */
     async function resolveSnippetText(sn) {
         let text = sn.value;
         if (!text.includes("__COORDS__")) return text;
@@ -945,7 +941,7 @@
     }
 
     // ════════════════════════════════════════════════════════════════════════════
-    // ⭐ 14. RESET-COORDS PROMPT
+    // ⭐ 13. RESET-COORDS PROMPT
     // ════════════════════════════════════════════════════════════════════════════
 
     /**
@@ -1028,7 +1024,7 @@
     }
 
     // ════════════════════════════════════════════════════════════════════════════
-    // ⭐ 15. NOTIFICATION ENGINE
+    // ⭐ 14. NOTIFICATION ENGINE
     // ════════════════════════════════════════════════════════════════════════════
 
     /** Set der bereits angezeigten Notification-Keys (Deduplizierung). */
@@ -1083,7 +1079,7 @@
     }
 
     // ════════════════════════════════════════════════════════════════════════════
-    // ⭐ 16. CHECKER ENGINE
+    // ⭐ 15. CHECKER ENGINE
     // ════════════════════════════════════════════════════════════════════════════
 
     /** Definitionen für Checker-Erkennung (Links + Notification-Konfiguration). */
@@ -1421,7 +1417,7 @@
     }
 
     // ════════════════════════════════════════════════════════════════════════════
-    // ⭐ 17. SAVE-ERROR HANDLER
+    // ⭐ 16. SAVE-ERROR HANDLER
     // ════════════════════════════════════════════════════════════════════════════
 
     /**
@@ -1519,9 +1515,9 @@
 
         // Beim Klick: resize nach 300ms und 600ms
         viewBtn.addEventListener("click", () => {
-            setTimeout(() => resizeNoteTextarea(2), 300);
+            setTimeout(() => resizeNoteTextarea(), 300);
             setTimeout(() => {
-                resizeNoteTextarea(2);
+                resizeNoteTextarea();
                 focusAndPositionCursor();  // Cursor ans Ende beim Öffnen
             }, 600);
         });
@@ -1530,7 +1526,7 @@
     }
 
     // ════════════════════════════════════════════════════════════════════════════
-    // ⭐ 18. UI ENGINE (Styles + Elements)
+    // ⭐ 17. UI ENGINE (Styles + Elements)
     // ════════════════════════════════════════════════════════════════════════════
 
     /** Injiziert die CSS-Styles einmalig in den <head>. */
@@ -2015,8 +2011,6 @@
         const noteWrapper = document.querySelector(".PersonalCacheNote");
         if (!noteWrapper) return;
 
-        injectStyles();
-
         const container = document.createElement("div");
         container.id = "cc-ui-container";
         container.appendChild(buildCCButton());
@@ -2168,7 +2162,7 @@
     }
 
     // ════════════════════════════════════════════════════════════════════════════
-    // ⭐ 19. KEYBOARD SHORTCUTS
+    // ⭐ 18. KEYBOARD SHORTCUTS
     // ════════════════════════════════════════════════════════════════════════════
 
     /** Tastatur-Event-Handler für alle Shortcuts. */
@@ -2223,20 +2217,8 @@
     }
 
     // ════════════════════════════════════════════════════════════════════════════
-    // ⭐ 20. START PIPELINE
+    // ⭐ 19. START PIPELINE
     // ════════════════════════════════════════════════════════════════════════════
-
-    /**
-     * Zeigt die "Koordinaten geändert" Warnung mit alter/neuer Koordinate.
-     *
-     * Enthält drei Elemente:
-     *  - Text mit Alt/Neu Koordinaten (links)
-     *  - "Listen"-Button für die Bookmarkliste (mitte)
-     *  - "X"-Button zum Schließen (rechts) → markiert die aktuellen Koords als "gesehen"
-     *
-     * @param {string} oldCoords Alte Koordinaten (oder "(keine)")
-     * @param {string} newCoords Neue Koordinaten (oder "(zurückgesetzt)")
-     */
 
     /**
      * Zeigt eine rote Warnung wenn alte Koords in der Note sind, aber keine aktuellen im DOM.
@@ -2292,6 +2274,17 @@
         log("Stale-Coords-Warnung angezeigt:", staleCoords);
     }
 
+    /**
+     * Zeigt die "Koordinaten geändert" Warnung mit alter/neuer Koordinate.
+     *
+     * Enthält drei Elemente:
+     *  - Text mit Alt/Neu Koordinaten (links)
+     *  - "Listen"-Button für die Bookmarkliste (mitte)
+     *  - "X"-Button zum Schließen (rechts) → markiert die aktuellen Koords als "gesehen"
+     *
+     * @param {string} oldCoords Alte Koordinaten (oder "(keine)")
+     * @param {string} newCoords Neue Koordinaten (oder "(zurückgesetzt)")
+     */
     function showCoordsChangedWarning(oldCoords, newCoords) {
         log("showCoordsChangedWarning:", { oldCoords, newCoords });
 
