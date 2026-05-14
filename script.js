@@ -139,7 +139,7 @@
         return new Promise(resolve => {
             const start = Date.now();
             const tick = () => {
-                let res = null;
+                let res;
                 try { res = predicate(); } catch (_) {}
                 if (res) return resolve(res);
                 if (Date.now() - start >= timeoutMs) return resolve(null);
@@ -500,11 +500,8 @@
     /** Formatiert alte "~* CC:"-Notizen beim Laden der Seite in das neue Format. */
     function autoBeautifyOldNote() {
         const saved = getWorkingNote();
-        debug("Ursprüngliche Note:\n" + saved);
-
         let lines = saved.split("\n");
         const coords = getCorrectedCoords();
-        debug("Korrigierte Koordinaten:", coords ?? "(keine)");
         if (!coords) return;
 
         // Pfad A: Alte "~* CC:"-Zeilen vorhanden → komplett konvertieren
@@ -529,19 +526,9 @@
 
         // Pfad C: Vorhandene CC-Zeile ggf. auf aktuelle Koordinaten aktualisieren
         const expected = `📌 ${coords}`;
-        if (lines[ccIdx].trim() !== expected) {
-            debug("autoBeautifyOldNote: CC-Zeile aktualisiert →", expected);
-            lines[ccIdx] = expected;
-        }
-
-        // Beautify anwenden und nur speichern wenn sich etwas geändert hat
+        if (lines[ccIdx].trim() !== expected) lines[ccIdx] = expected;
         const beautified = beautifyLines(lines).join("\n");
-        if (beautified !== saved) {
-            debug("autoBeautifyOldNote: Änderungen erkannt → setWorkingNote");
-            setWorkingNote(beautified);
-        } else {
-            debug("autoBeautifyOldNote: Keine Änderungen → kein Speichern nötig");
-        }
+        if (beautified !== saved) setWorkingNote(beautified);
     }
 
     /** Aktualisiert die erste CC-Zeile in der Textarea auf `cachedCoords`. */
@@ -587,8 +574,6 @@
             cachedCoords = newCoords;
 
             copyBtn ??= document.getElementById("vl-copy-coords-btn");
-
-            // Copy-Button aktivieren/deaktivieren
             if (copyBtn) copyBtn.disabled = !newCoords;
         });
 
@@ -1107,7 +1092,6 @@
     })();
 
     function scanCheckers() {
-        debug("scanCheckers");
         const saved = getWorkingNote().toUpperCase();
 
         let foundAnyChecker = false;
@@ -1299,16 +1283,12 @@
             : null;
 
         // Bei "FALSCH": alte CC-Zeile am Anfang entfernen
-        if (snippet.includes("GEOCHECKER FALSCH") && isCCLine(lines[0])) {
-            debug("SolutionChecker: entferne alte CC-Zeile");
-            lines.shift();
-        }
+        if (snippet.includes("GEOCHECKER FALSCH") && isCCLine(lines[0])) lines.shift();
 
         lines = beautifyLines(lines);
 
         // Stelle sicher dass eine CC-Zeile am Anfang ist (bei GEOCHECKER OK mit neuen Koords)
         if (snippet.includes("GEOCHECKER OK") && cachedCoords && !isCCLine(lines[0])) {
-            debug("SolutionChecker OK: füge CC-Zeile mit neuen Koords am Anfang ein");
             lines.unshift(`📌 ${cachedCoords}`);
         }
 
@@ -1325,13 +1305,10 @@
             if (!oldCoordsFromFirstLine ||
                 normalizeCoordsForComparison(oldCoordsFromFirstLine) !== normalizeCoordsForComparison(cachedCoords)) {
                 log("SolutionChecker OK: zeige Warnung für neue Koordinaten");
-                debug("  Alt:", oldCoords);
-                debug("  Neu:", cachedCoords);
                 showCoordsChangedWarning(oldCoords, cachedCoords);
             }
         }
 
-        // Reset-Coords-Prompt bei FALSCH + vorhandenen korrigierten Coords
         if (snippet.includes("GEOCHECKER FALSCH") && cachedCoords) {
             log("SolutionChecker: zeige Reset-Coords-Prompt");
             showResetCoordsPrompt();
