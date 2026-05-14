@@ -828,24 +828,18 @@
         insertSnippet(text, noteWasClosed, sn);
 
         if (sn.removeCC) {
-            debug("Snippet: removeCC=true → CC-Zeile entfernen");
             const lines = DOM.note.value.split("\n");
             if (isCCLine(lines[0])) lines.shift();
             writeLines(lines, true);
-            if (sn.confirmResetCoords) {
-                debug("Snippet: Reset-Coords-Prompt anzeigen");
-                showResetCoordsPrompt();
-            }
+            if (sn.confirmResetCoords) showResetCoordsPrompt();
             return;
         }
 
         if (sn.autoSave) {
-            debug("Snippet: autoSave=true → speichern");
             writeLines(DOM.note.value.split("\n"), true);
             return;
         }
 
-        debug("Snippet: kein autoSave, nur Cursor-Focus");
         DOM.note.focus();
         resizeNoteTextarea();
         scrollToNote();
@@ -860,7 +854,6 @@
      * Wird nach "GEOCHECKER FALSCH" und bei Seitenstart (falls nötig) angezeigt.
      */
     function showResetCoordsPrompt() {
-        debug("showResetCoordsPrompt");
         document.getElementById("vl-reset-coords-prompt")?.remove();
 
         const container = ensureNotificationsContainer();
@@ -883,23 +876,19 @@
             overlay.remove();
             log("Reset-Coords: bestätigt");
 
-            // CC-Zeile aus Note entfernen, falls vorhanden
             activateNote();
             const ta = DOM.note;
             if (ta) {
                 const lines = ta.value.split("\n");
                 if (isCCLine(lines[0])) {
-                    debug("Reset-Coords: CC-Zeile entfernen");
                     lines.shift();
                     writeLines(lines, true);
                     await sleep(TIMINGS.saveSettleDelay);
                 }
             }
 
-            // Wiederherstellen-Button klicken (evtl. erst Dialog öffnen)
             let restoreBtn = DOM.restoreBtn;
             if (!restoreBtn) {
-                debug("Reset-Coords: öffne Koordinaten-Dialog");
                 DOM.latLonLink?.click();
                 restoreBtn = await waitFor(
                     () => DOM.restoreBtn,
@@ -1891,7 +1880,6 @@
         const normalSnippets = SNIPPETS.filter(sn => (sn.emoji || sn.image) && !sn.isLink && !sn.isFbSearch && !sn.inOverflow);
         normalSnippets.forEach(sn => container.appendChild(buildSnippetButton(sn)));
 
-        // "..."-Overflow-Button mit Dropdown
         const overflowSnippets = SNIPPETS.filter(sn => sn.inOverflow);
         if (overflowSnippets.length > 0) {
             const wrap = document.createElement("div");
@@ -1936,7 +1924,6 @@
             container.appendChild(wrap);
         }
 
-        // FB-Button + Link-Buttons
         const extraSnippets = SNIPPETS.filter(sn => sn.isFbSearch || sn.isLink);
         extraSnippets.forEach(sn => container.appendChild(buildSnippetButton(sn)));
 
@@ -2264,7 +2251,6 @@
 
             const data = JSON.parse(stored);
 
-            // Zeige Warnung: Alt = alte falsche Koords, Neu = aktuelle (resezte) Koords
             const currentCoords = getCorrectedCoords();
             log("Reset-Warnung aus localStorage angezeigt", {
                 oldCoords: data.oldCoords,
