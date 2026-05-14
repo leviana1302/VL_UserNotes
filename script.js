@@ -236,13 +236,9 @@
     /** Wartet auf korrigierte Koordinaten und aktualisiert cachedCoords. */
     async function waitForCoords(timeoutMs = 2000) {
         if (cachedCoords) return cachedCoords;
-        const result = await waitFor(() => {
-            const c = getCorrectedCoords();
-            if (c) cachedCoords = c;
-            return c;
-        }, { interval: 100, timeoutMs });
-        debug("waitForCoords →", result);
-        return result;
+        cachedCoords = await waitFor(() => getCorrectedCoords(), { interval: 100, timeoutMs });
+        debug("waitForCoords →", cachedCoords);
+        return cachedCoords;
     }
 
     /** Setzt den Cursor ans Ende der Textarea. */
@@ -250,8 +246,7 @@
         const ta = DOM.note;
         if (!ta) return;
         ta.focus();
-        const len = ta.value.length;
-        ta.setSelectionRange(len, len);
+        ta.setSelectionRange(ta.value.length, ta.value.length);
     }
 
     /** Passt die Höhe der Textarea an. */
@@ -1757,15 +1752,11 @@
      * - Grün "📝"  → Note entspricht dem ursprünglichen Ladestand
      * - Blau "↩"   → Note wurde seither verändert
      */
-    function updateCCBtn() {
-        const btn = document.getElementById("cc-btn");
-        if (!btn || originalNoteText === null) return;
-
+    function updateUndoBtn() {
+        const undoBtn = document.getElementById("cc-btn");
+        if (!undoBtn || originalNoteText === null) return;
         const currentText = DOM.note?.value ?? getSavedNote();
-        const changed = currentText.trim() !== originalNoteText.trim();
-
-        // Button deaktivieren wenn Note unverändert, aktivieren wenn geändert
-        btn.disabled = !changed;
+        undoBtn.disabled = currentText.trim() === originalNoteText.trim();
     }
 
     /** Erzeugt einen Emoji-Container mit passendem Scale-Fix (Emoji oder Buchstaben). */
@@ -2036,11 +2027,11 @@
 
         noteWrapper.prepend(container);
 
-        updateCCBtn();
+        updateUndoBtn();
         initCharCounter();
 
-        // updateCCBtn bei Änderungen in der Textarea (statt Polling)
-        DOM.note?.addEventListener('input', updateCCBtn);
+        // updateUndoBtn bei Änderungen in der Textarea (statt Polling)
+        DOM.note?.addEventListener('input', updateUndoBtn);
 
         debug("UI hinzugefügt");
     }
