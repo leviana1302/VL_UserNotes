@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      8.8
+// @version      8.9
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -628,9 +628,8 @@
         const coordsEl = DOM.corrected;
         if (!coordsEl) return;
 
-        // Lazy-gecacht: Elemente existieren erst nach addUI() → beim ersten Observer-Aufruf befüllen
-        let falschOpt = null;
-        let copyBtn   = null;
+        // Lazy-gecacht: copyBtn existiert erst nach addUI() → beim ersten Observer-Aufruf befüllen
+        let copyBtn = null;
 
         const observer = new MutationObserver(() => {
             const newCoords = getCorrectedCoords();
@@ -639,14 +638,7 @@
             debug("Koordinaten-Observer: Änderung erkannt:", { alt: cachedCoords, neu: newCoords });
             cachedCoords = newCoords;
 
-            falschOpt ??= document.querySelector('#cc-snippets [data-vl-key="falsch"]');
-            copyBtn   ??= document.getElementById("vl-copy-coords-btn");
-
-            // Dropdown-Label aktualisieren (falls UI schon vorhanden)
-            if (falschOpt) {
-                const hint = falschOpt.dataset.shortcutKey ? `  [Alt+${falschOpt.dataset.shortcutKey}]` : "";
-                falschOpt.textContent = `❌ GEOCHECKER FALSCH (${newCoords ?? "?"})${hint}`;
-            }
+            copyBtn ??= document.getElementById("vl-copy-coords-btn");
 
             // Copy-Button aktivieren/deaktivieren
             if (copyBtn) copyBtn.disabled = !newCoords;
@@ -705,7 +697,6 @@
      *   linkUrl          – URL für isLink=true (Platzhalter: __GCCODE__)
      */
     const SNIPPETS = [
-        { label: '➕ Snippet', value: '' },
         {
             label: `✅ GEOCHECKER OK (${getTodayStr()})`,
             emoji: '✅', shortcutKey: '1',
@@ -906,14 +897,6 @@
 
         const liveCoords = await waitForCoords();
         text = text.replace("__COORDS__", liveCoords ?? "?");
-
-        if (liveCoords) {
-            const opt = document.querySelector('#cc-snippets [data-vl-key="falsch"]');
-            if (opt) {
-                const hint = opt.dataset.shortcutKey ? `  [Alt+${opt.dataset.shortcutKey}]` : "";
-                opt.textContent = `❌ GEOCHECKER FALSCH (${liveCoords})${hint}`;
-            }
-        }
         return text;
     }
 
@@ -1630,12 +1613,6 @@
                 color: #888;
                 pointer-events: none;
             }
-            #cc-snippets {
-                padding: 6px;
-                border-radius: 4px;
-                border: 1px solid #ccc;
-                cursor: pointer;
-            }
             #cc-ui-container button:not(#cc-overflow-btn):not(#cc-btn) {
                 position: relative;
                 flex: 0 1 calc(100% / 11 - 6px);
@@ -1903,42 +1880,6 @@
         return b;
     }
 
-    /** Baut das Snippet-Dropdown. */
-    function buildSnippetSelect() {
-        const select = document.createElement("select");
-        select.id = "cc-snippets";
-
-        SNIPPETS.forEach(sn => {
-            // Link-Snippets, FB-Suche und Overflow-Snippets nicht im Dropdown anzeigen
-            if (sn.isLink || sn.isFbSearch || sn.inOverflow) return;
-
-            const opt = document.createElement("option");
-            opt.textContent = sn.shortcutKey
-                ? `${sn.label}  [Alt+${sn.shortcutKey}]`
-                : sn.label;
-            opt.value = sn.value;
-
-            if (sn.label === "➕ Snippet") {
-                opt.disabled = true;
-                opt.selected = true;
-            }
-            if (sn.value.includes("__COORDS__")) opt.dataset.vlKey = "falsch";
-            if (sn.shortcutKey)                  opt.dataset.shortcutKey = sn.shortcutKey;
-
-            select.appendChild(opt);
-        });
-
-        select.addEventListener("change", async e => {
-            const val = e.target.value;
-            if (!val) return;
-            const sn = SNIPPETS.find(s => s.value === val);
-            if (sn) await applySnippet(sn);
-            select.selectedIndex = 0;
-        });
-
-        return select;
-    }
-
     /** Baut den CC/Undo-Button mit Toggle-Logik. */
     function buildCCButton() {
         const btn = document.createElement("button");
@@ -2079,7 +2020,6 @@
         const container = document.createElement("div");
         container.id = "cc-ui-container";
         container.appendChild(buildCCButton());
-        // container.appendChild(buildSnippetSelect());
 
         // Snippet-Buttons direkt in den Container (eine Zeile mit Undo-Button)
         // Normale Buttons (emoji, kein Link, kein FB, kein Overflow)
@@ -2494,17 +2434,16 @@
             return;
         }
 
-        // 1. Aktuelle korrigierte Koords aus DOM
+        // 1. Aktuelle korrigierte Koords + erste Note-Zeile einmalig lesen
         const currentCoords = getCorrectedCoords();
         debug("checkAndShowCoordsChanged: currentCoords =", currentCoords);
 
+        const saved          = getSavedNote();
+        const firstLine      = saved.split("\n")[0];
+        const firstLineCoords = isCCLine(firstLine) ? extractCoordsFromCCLine(firstLine) : null;
+
         // Spezialfall: Keine aktuellen Koords, aber alte in der Note vorhanden
         if (!currentCoords) {
-            const saved = getSavedNote();
-            const firstLine = saved.split("\n")[0];
-            const firstLineCoords = isCCLine(firstLine) ? extractCoordsFromCCLine(firstLine) : null;
-
-            // Nur Stale-Coords-Warnung zeigen wenn NICHT bereits eine Reset-Warnung angezeigt wurde
             if (firstLineCoords && !resetWarningWasShown) {
                 debug("  ⚠️ SPEZIALFALL: Keine aktuellen Koords, aber alte Koords in der Note!");
                 showStaleCoordsBanner(firstLineCoords);
@@ -2512,15 +2451,9 @@
             return;
         }
 
-        // 2. Erste Zeile der gespeicherten Note
-        const saved = getSavedNote();
-        const firstLine = saved.split("\n")[0];
+        // 2. Erste Zeile loggen
         debug("  erste Note-Zeile:", JSON.stringify(firstLine));
-
-        // 3. Koords aus erster Zeile extrahieren (beide Formate unterstützen!)
-        let firstLineCoords = null;
         if (isCCLine(firstLine)) {
-            firstLineCoords = extractCoordsFromCCLine(firstLine);
             debug("  Koords aus erster Zeile:", firstLineCoords);
         } else {
             debug("  erste Zeile ist keine CC-Zeile");
@@ -2626,16 +2559,7 @@
         }
     }
 
-    /** Blendet alle HIDDEN_SELECTORS-Elemente sofort aus (vor load-Event). */
-    function hideElements() {
-        for (const sel of HIDDEN_SELECTORS) {
-            for (const el of document.querySelectorAll(sel)) {
-                el.style.display = "none";
-            }
-        }
-    }
-
-    hideElements();
+    injectStyles();
 
     window.addEventListener("load", () => {
         // Mobile-Viewport sofort anpassen (verhindert Ruckeln)
