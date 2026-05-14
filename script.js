@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      8.9
+// @version      8.10
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -22,11 +22,8 @@
     const SCRIPT_NAME    = GM_info?.script?.name    ?? "unbekannt";
 
     /** GC-Code aus Seitenkopf auslesen (ändert sich nicht). */
-    const gcCode = (() => {
-        const el = document.getElementById("ctl00_ContentBody_CoordInfoLinkControl1_uxCoordInfoCode");
-        const code = el?.textContent?.trim() ?? null;
-        return code;
-    })();
+    const gcCode = document.getElementById("ctl00_ContentBody_CoordInfoLinkControl1_uxCoordInfoCode")
+        ?.textContent?.trim() ?? null;
 
     /** Facebook-Suche URL (Top-Suche, Desktop + Mobile). */
     const FB_SEARCH_URL = "https://www.facebook.com/search/top/?q=__GCCODE__";
@@ -436,16 +433,16 @@
 
         for (const line of lines) {
             let t = line;
+            const trimmed = t.trim();
 
-            if (t.trim() === "---") {
+            if (trimmed === "---") {
                 result.push("");
                 continue;
             }
 
             // Prüfe BEAUTIFY_EXACT auf getrimmtem String
-            if (BEAUTIFY_EXACT[t.trim()]) {
-                t = BEAUTIFY_EXACT[t.trim()];
-            }
+            const exact = BEAUTIFY_EXACT[trimmed];
+            if (exact) t = exact;
 
             // Danach immer BEAUTIFY_PREFIX prüfen
             for (const [prefix, emoji] of BEAUTIFY_PREFIX) {
@@ -590,11 +587,8 @@
         }
     }
 
-    /**
-     * Aktualisiert die erste CC-Zeile in der Textarea auf `cachedCoords`.
-     * @param {boolean} onlyIfChanged  true = nur schreiben bei Unterschied
-     */
-    function updateFirstCCLine(onlyIfChanged = false) {
+    /** Aktualisiert die erste CC-Zeile in der Textarea auf `cachedCoords`. */
+    function updateFirstCCLine() {
         if (!cachedCoords) return;
         const ta = DOM.note;
         if (!ta) return;
@@ -603,7 +597,7 @@
         if (!isCCLine(lines[0])) return;
 
         const expected = `📌 ${cachedCoords}`;
-        if (onlyIfChanged && lines[0].trim() === expected) return;
+        if (lines[0].trim() === expected) return;
 
         lines[0] = expected;
         writeLines(lines, true);
@@ -2508,7 +2502,7 @@
         autoBeautifyOldNote();
 
         // 3. erste CC-Zeile ggf. aktualisieren
-        updateFirstCCLine(true);
+        updateFirstCCLine();
 
         // 4. Checker-Messages (Info-Icons)
         scanCheckers();
