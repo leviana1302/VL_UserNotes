@@ -1,5 +1,9 @@
 # Changelog
 
+## [8.8] - 2026-05-14
+### Changed
+- kleine Optimierungen
+
 ## [8.7] - 2026-05-12
 ### Changed
 - kleine Optimierungen

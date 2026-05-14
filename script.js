@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VL_UserNotes
 // @namespace    http://tampermonkey.net/
-// @version      8.7
+// @version      8.8
 // @description  Beautify User Notes
 // @author       Verena
 // @match        https://www.geocaching.com/geocache/GC*
@@ -267,9 +267,9 @@
         const scrollHeight = ta.scrollHeight;
         const newHeight = scrollHeight + 50;
 
-        log("resizeNoteTextarea:");
-        log("  scrollHeight:", scrollHeight, "px");
-        log("  newHeight (+ 50px):", newHeight, "px");
+        debug("resizeNoteTextarea:");
+        debug("  scrollHeight:", scrollHeight, "px");
+        debug("  newHeight (+ 50px):", newHeight, "px");
 
         ta.style.height = newHeight + "px";
     }
@@ -644,8 +644,9 @@
         const coordsEl = DOM.corrected;
         if (!coordsEl) return;
 
-        const falschOpt = document.querySelector('#cc-snippets [data-vl-key="falsch"]');
-        const copyBtn   = document.getElementById("vl-copy-coords-btn");
+        // Lazy-gecacht: Elemente existieren erst nach addUI() → beim ersten Observer-Aufruf befüllen
+        let falschOpt = null;
+        let copyBtn   = null;
 
         const observer = new MutationObserver(() => {
             const newCoords = getCorrectedCoords();
@@ -653,6 +654,9 @@
 
             debug("Koordinaten-Observer: Änderung erkannt:", { alt: cachedCoords, neu: newCoords });
             cachedCoords = newCoords;
+
+            falschOpt ??= document.querySelector('#cc-snippets [data-vl-key="falsch"]');
+            copyBtn   ??= document.getElementById("vl-copy-coords-btn");
 
             // Dropdown-Label aktualisieren (falls UI schon vorhanden)
             if (falschOpt) {
@@ -784,7 +788,7 @@
         }
     ];
 
-    /** O(1)-Lookup für Alt+Zahl-Shortcuts im Keydown-Handler. */
+    /** O(1)-Lookup für Alt+Zahl/Buchstabe-Shortcuts im Keydown-Handler. */
     const SNIPPET_SHORTCUT_MAP = new Map(
         SNIPPETS.filter(s => s.shortcutKey).map(s => [s.shortcutKey, s])
     );
@@ -1412,12 +1416,10 @@
             lines.unshift(`📌 ${cachedCoords}`);
         }
 
-        // Nach erstem Block (= erste Leerzeile) einfügen
-        let i = 0;
-        while (i < lines.length && lines[i].trim() !== "") i++;
-        const insertAt = i + 1;
-        lines.splice(insertAt, 0, "");
-        lines.splice(insertAt + 1, 0, snippet.trimStart());
+        // Nach der 📌 CC-Zeile einfügen (konsistent mit insertSnippet)
+        const ccIdx = lines.findIndex(isCCLine);
+        const insertAt = ccIdx >= 0 ? ccIdx + 1 : 0;
+        lines.splice(insertAt, 0, snippet.trimStart());
 
         scrollToNote();
         writeLines(lines, true);
