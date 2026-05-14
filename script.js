@@ -88,7 +88,6 @@
         // iPad-Safari rendert die problematischen Emojis fast korrekt (1.1), andere zu klein (1.25)
         const smallEmojiScale = isIPadSafari ? 1.1 : 1.25;
 
-        debug("Device:", { isAndroid, isSafari, isIPad, isIPadSafari, smallEmojiScale });
         return { isAndroid, isSafari, isIPad, isIPadSafari, smallEmojiScale };
     })();
 
@@ -2061,7 +2060,6 @@
      * Beispiel: Nach Reset der Koords wurde die alte CC-Zeile nicht aus der Note entfernt.
      */
     function showStaleCoordsBanner(staleCoords) {
-        debug("showStaleCoordsBanner:", staleCoords);
         document.getElementById("vl-stale-coords-banner")?.remove();
 
         const container = ensureNotificationsContainer();
@@ -2076,7 +2074,6 @@
         div.style.justifyContent = "space-between";
         div.style.gap = "12px";
 
-        // Linke Seite: Text
         const textDiv = document.createElement("div");
         textDiv.style.flex = "1";
         textDiv.style.fontSize = "13px";
@@ -2086,7 +2083,6 @@
 
         div.appendChild(textDiv);
 
-        // Rechts: X-Button
         const btnGroup = document.createElement("div");
         btnGroup.style.display = "flex";
         btnGroup.style.gap = "6px";
@@ -2127,7 +2123,6 @@
         const container = ensureNotificationsContainer();
         if (!container) return warn("showCoordsChangedWarning: Container nicht gefunden");
 
-        // Alte Warnung entfernen wenn sie schon da ist
         document.getElementById("warn-coords-changed")?.remove();
 
         const div = document.createElement("div");
@@ -2139,7 +2134,6 @@
         div.style.justifyContent = "space-between";
         div.style.gap = "12px";
 
-        // Linke Seite: Text und Koordinaten (mit Grid für Ausrichtung)
         const textDiv = document.createElement("div");
         textDiv.style.flex = "1";
         textDiv.style.fontSize = "13px";
@@ -2155,14 +2149,12 @@
 
         div.appendChild(textDiv);
 
-        // Button-Gruppe rechts
         const btnGroup = document.createElement("div");
         btnGroup.style.display = "flex";
         btnGroup.style.gap = "6px";
         btnGroup.style.flexShrink = "0";
         btnGroup.style.alignItems = "center";
 
-        // "Listen"-Button
         const listBtn = document.createElement("button");
         listBtn.type = "button";
         listBtn.className = "btn-add-to-list";
@@ -2174,14 +2166,12 @@
         listBtn.style.color = "#333";
         btnGroup.appendChild(listBtn);
 
-        // "X"-Button (Schließen + als gesehen markieren)
         const closeBtn = document.createElement("button");
         closeBtn.type = "button";
         closeBtn.textContent = "✕";
         closeBtn.title = "Als gelesen markieren";
         closeBtn.style.cssText = "background:transparent;border:1px solid rgba(255,255,255,0.6);color:white;border-radius:3px;padding:2px 8px;cursor:pointer;font-weight:bold;";
         closeBtn.addEventListener("click", () => {
-            // Aktuelle korrigierte Koords als "gesehen" markieren
             markCoordsAsSeen();
             div.remove();
             log("Koords-Warnung geschlossen und als gesehen markiert");
@@ -2201,7 +2191,6 @@
                 `vl-corrected-coords-${gcCode}`,
                 JSON.stringify({ coords, timestamp: Date.now() })
             );
-            debug("Koords als gesehen markiert:", coords);
         } catch (e) {
             warn("markCoordsAsSeen: localStorage Fehler:", e);
         }
@@ -2311,23 +2300,13 @@
     async function runStartupPipeline() {
         await waitForSavedNoteLoaded();
 
-        // Original-Text für Undo sichern
         originalNoteText = getSavedNote();
-        debug("originalNoteText gesichert, Länge:", originalNoteText.length);
 
-        // 2. Note aufräumen
         autoBeautifyOldNote();
-
-        // 3. erste CC-Zeile ggf. aktualisieren
         updateFirstCCLine();
-
-        // 4. Checker-Messages (Info-Icons)
         scanCheckers();
-
-        // 5. Änderungen speichern
         flushNoteChanges();
 
-        // 6. UI bauen
         addUI();
         initCopyCoordBtn();
         initCopyGcCodeBtn();
@@ -2338,7 +2317,6 @@
         // 7b. Koordinaten-Warnung prüfen (Mismatch zwischen erster Note-Zeile und korrigierten Koords)
         checkAndShowCoordsChanged();
 
-        // 8. Observer & Interceptoren
         initSaveErrorObserver();
         initNoteOpenObserver();
         initSaveButtonInterceptor();
@@ -2353,11 +2331,9 @@
 
         startDomMonitor();
 
-        // Listener für den integrierten Solution-Checker
         const checkerBtn = document.getElementById("CheckerButton");
         if (checkerBtn) {
             checkerBtn.addEventListener("click", () => {
-                debug("SolutionChecker: CheckerButton geklickt");
                 setTimeout(handleSolutionCheckerResult, TIMINGS.checkerBtnDelay);
             });
         }
