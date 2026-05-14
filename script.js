@@ -529,20 +529,12 @@
 
         // Pfad A: Alte "~* CC:"-Zeilen vorhanden → komplett konvertieren
         if (lines.some(l => l.startsWith("~* CC:"))) {
-            let firstConverted = false;
-            const newLines = [];
-            for (const line of lines) {
-                if (line.startsWith("~* CC:")) {
-                    if (!firstConverted) {
-                        firstConverted = true;
-                        newLines.push(`📌 ${coords}`);
-                    } else {
-                        newLines.push(formatOldCC(line));
-                    }
-                } else {
-                    newLines.push(line);
-                }
-            }
+            let firstCC = true;
+            const newLines = lines.map(line => {
+                if (!line.startsWith("~* CC:")) return line;
+                if (firstCC) { firstCC = false; return `📌 ${coords}`; }
+                return formatOldCC(line);
+            });
             setWorkingNote(beautifyLines(newLines).join("\n"));
             return;
         }
@@ -1349,21 +1341,10 @@
         scrollToNote();
         writeLines(lines, true);
 
-        // Nach updateFirstCCLine ggf. Koords-Change-Warnung anzeigen (nur bei OK)
-        // Bei FALSCH kommt ja showResetCoordsPrompt
         if (snippet.includes("GEOCHECKER OK") && cachedCoords) {
-            // Es gibt NEUE Koords nach dem Checker
-            // Zeige Warnung unabhängig davon ob es vorher alte Koords gab
-
             const oldCoords = oldCoordsFromFirstLine ?? "(keine)";
-
-            // Zeige Warnung wenn:
-            // - Es gab keine alten Koords (neue wurden gerade gefunden) → immer zeigen
-            // - ODER alte und neue sind unterschiedlich
-            const shouldShowWarning = !oldCoordsFromFirstLine ||
-                normalizeCoordsForComparison(oldCoordsFromFirstLine) !== normalizeCoordsForComparison(cachedCoords);
-
-            if (shouldShowWarning) {
+            if (!oldCoordsFromFirstLine ||
+                normalizeCoordsForComparison(oldCoordsFromFirstLine) !== normalizeCoordsForComparison(cachedCoords)) {
                 log("SolutionChecker OK: zeige Warnung für neue Koordinaten");
                 debug("  Alt:", oldCoords);
                 debug("  Neu:", cachedCoords);
@@ -1794,7 +1775,7 @@
             a.appendChild(img);
 
             // Klick: GC-Code in Zwischenablage kopieren
-            a.addEventListener("click", (e) => {
+            a.addEventListener("click", () => {
                 if (gcCode) copyToClipboard(gcCode);
             });
             return a;
