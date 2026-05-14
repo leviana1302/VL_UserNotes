@@ -866,12 +866,9 @@
 
     /** Löst __COORDS__-Platzhalter auf. */
     async function resolveSnippetText(sn) {
-        let text = sn.value;
-        if (!text.includes("__COORDS__")) return text;
-
+        if (!sn.value.includes("__COORDS__")) return sn.value;
         const liveCoords = await waitForCoords();
-        text = text.replace("__COORDS__", liveCoords ?? "?");
-        return text;
+        return sn.value.replace("__COORDS__", liveCoords ?? "?");
     }
 
     /** Hauptfunktion: Snippet anwenden (Text einfügen, ggf. speichern). */
@@ -1176,10 +1173,7 @@
             // suppressCheck (wenn definiert) hat Vorrang vor dem Reverse-Lookup in CHECKER_KEYWORDS.
             const alreadyHandled = def.suppressCheck
                 ? def.suppressCheck(saved)
-                : Object.entries(CHECKER_KEYWORDS)
-                    .filter(([, v]) => v === def.key)
-                    .map(([k]) => k)
-                    .some(kw => saved.includes(kw));
+                : Object.entries(CHECKER_KEYWORDS).some(([k, v]) => v === def.key && saved.includes(k));
 
             if (!alreadyHandled && !notified.has(def.key)) {
                 notified.add(def.key);
@@ -1296,11 +1290,7 @@
 
             // Reverse-Lookup: alle Note-Keywords finden die diesen Checker-Key als "erledigt" markieren
             // Beispiel: "CHALLENGE" → ["CHALLENGE ERFÜLLT"] (nicht "CHALLENGE NICHT ERFÜLLT")
-            const doneKeywords = Object.entries(CHECKER_KEYWORDS)
-                .filter(([, v]) => v === key)
-                .map(([k]) => k);
-
-            if (doneKeywords.some(kw => note.includes(kw))) {
+            if (Object.entries(CHECKER_KEYWORDS).some(([k, v]) => v === key && note.includes(k))) {
                 notified.delete(key);
                 document.getElementById("warn-" + key)?.remove();
             }
