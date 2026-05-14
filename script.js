@@ -62,7 +62,8 @@
     const HIDDEN_SELECTORS = [
         "#pcn_help",
         "#ctl00_ContentBody_advertisingWithUs",
-        ".Disclaimer"
+        ".Disclaimer",
+        `a[href*="advertising.aspx"]`
     ];
 
     // ════════════════════════════════════════════════════════════════════════════
