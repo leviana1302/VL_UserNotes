@@ -66,11 +66,8 @@
     // ⭐ 2. LOGGER
     // ════════════════════════════════════════════════════════════════════════════
 
-    const DEBUG = false;
-
-    const log   = (...args) => console.log("[VL]",   ...args);
-    const debug = DEBUG ? (...args) => console.debug("[VL]", ...args) : () => {};
-    const warn  = (...args) => console.warn("[VL]",  ...args);
+    const log  = (...args) => console.log("[VL]",  ...args);
+    const warn = (...args) => console.warn("[VL]", ...args);
 
     log(`=== ${SCRIPT_NAME} ${SCRIPT_VERSION} gestartet ===`);
 
@@ -1908,7 +1905,6 @@
 
         // updateUndoBtn bei Änderungen in der Textarea (statt Polling)
         DOM.note?.addEventListener('input', updateUndoBtn);
-
     }
 
     /**
@@ -1952,7 +1948,6 @@
 
         // iPad/iOS Safari: touchstart feuert noch VOR click
         saveBtn.addEventListener('touchstart', cleanBeforeSave, { passive: true });
-
     }
 
     /**
@@ -1983,7 +1978,6 @@
                 }
             }
         });
-
     }
 
     // ════════════════════════════════════════════════════════════════════════════
