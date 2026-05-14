@@ -237,7 +237,6 @@
     async function waitForCoords(timeoutMs = 2000) {
         if (cachedCoords) return cachedCoords;
         cachedCoords = await waitFor(() => getCorrectedCoords(), { interval: 100, timeoutMs });
-        debug("waitForCoords →", cachedCoords);
         return cachedCoords;
     }
 
@@ -554,7 +553,6 @@
      */
     function initCoordsObserver() {
         cachedCoords = getCorrectedCoords();
-        debug("Initiale Koordinaten:", cachedCoords);
 
         const coordsEl = DOM.corrected;
         if (!coordsEl) return;
@@ -566,7 +564,6 @@
             const newCoords = getCorrectedCoords();
             if (newCoords === cachedCoords) return;
 
-            debug("Koordinaten-Observer: Änderung erkannt:", { alt: cachedCoords, neu: newCoords });
             cachedCoords = newCoords;
 
             copyBtn ??= document.getElementById("vl-copy-coords-btn");
@@ -1147,19 +1144,9 @@
         if (foundAnyChecker) return;
         if (saved.includes("KEIN GEOCHECKER")) return;
 
-        // Nur einfügen, wenn Cache-Typ einen Geochecker erfordert
-        if (!cacheType || !GEOCACHER_REQUIRED_TYPES.has(cacheType)) {
-            debug(`scanCheckers: Cache-Typ "${cacheType}" erfordert keinen Geochecker`);
-            return;
-        }
+        if (!cacheType || !GEOCACHER_REQUIRED_TYPES.has(cacheType)) return;
+        if (!cachedCoords) return;
 
-        // Nur einfügen, wenn korrigierte Koordinaten vorhanden sind
-        if (!cachedCoords) {
-            debug("scanCheckers: keine korrigierten Koordinaten → KEIN GEOCHECKER nicht eingefügt");
-            return;
-        }
-
-        // Keine Checker gefunden → "KEIN GEOCHECKER" einfügen
         let lines = getWorkingNote().split("\n");
         const coords = getCorrectedCoords();
         if (coords) lines = replaceCC(lines, coords);
@@ -1227,8 +1214,8 @@
      */
     async function handleSolutionCheckerResult() {
         const el = await waitFor(() => {
-            const e = DOM.solutionResponse;
-            return e?.textContent.trim() ? e : null;
+            const resp = DOM.solutionResponse;
+            return resp?.textContent.trim() ? resp : null;
         }, { interval: 1000, timeoutMs: TIMINGS.waitForSolution });
 
         if (!el) return;
@@ -1372,7 +1359,6 @@
             attributeFilter: ['style', 'class']
         });
 
-        debug("Save-Error-Observer gestartet");
     }
 
     /**
@@ -1392,7 +1378,6 @@
             }, 600);
         });
 
-        debug("Note-Open-Observer gestartet");
     }
 
     // ════════════════════════════════════════════════════════════════════════════
@@ -1754,7 +1739,7 @@
         ver.className   = "cc-btn-version";
         ver.textContent = `v${SCRIPT_VERSION}`;
         btn.appendChild(ver);
-        btn.disabled        = true;    // Grau am Anfang (disabled state)
+        btn.disabled        = true;
 
         btn.addEventListener("click", async e => {
             e.preventDefault();
@@ -1935,7 +1920,6 @@
         // updateUndoBtn bei Änderungen in der Textarea (statt Polling)
         DOM.note?.addEventListener('input', updateUndoBtn);
 
-        debug("UI hinzugefügt");
     }
 
     /**
@@ -1955,7 +1939,6 @@
         });
 
         observer.observe(target, { characterData: true, childList: true, subtree: true });
-        debug("DOM-Monitor gestartet (MutationObserver)");
     }
 
     /**
@@ -1972,10 +1955,7 @@
             if (!ta) return;
             const cleaned = cleanLines(ta.value.split("\n").map(normalizeCoords));
             const cleanedText = cleaned.join("\n");
-            if (cleanedText !== ta.value) {
-                debug("SaveButton-Interceptor: Leerzeilen reduziert / Koordinaten normalisiert");
-                setTextareaValue(ta, cleanedText);
-            }
+            if (cleanedText !== ta.value) setTextareaValue(ta, cleanedText);
         };
 
         // Desktop: capture=true stellt sicher, dass wir BEVOR React ausgeführt werden
@@ -1984,7 +1964,6 @@
         // iPad/iOS Safari: touchstart feuert noch VOR click
         saveBtn.addEventListener('touchstart', cleanBeforeSave, { passive: true });
 
-        debug("Save-Button-Interceptor gestartet");
     }
 
     /**
@@ -2016,7 +1995,6 @@
             }
         });
 
-        debug("Restore-Button-Observer gestartet");
     }
 
     // ════════════════════════════════════════════════════════════════════════════
