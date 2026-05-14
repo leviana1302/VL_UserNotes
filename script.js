@@ -266,7 +266,7 @@
         setTimeout(() => resizeNoteTextarea(), 300);   // Erster Resize nach React-Render
         setTimeout(() => {
             resizeNoteTextarea();                       // Zweiter Resize für Stabilität
-            focusAndPositionCursor();                    // Cursor ans Ende beim Öffnen
+            focusAndPositionCursor();
         }, 600);
         return true;
     }
@@ -477,7 +477,7 @@
     function normalizeCoordsForComparison(coords) {
         if (!coords) return "";
         return coords
-            .replace(/\s+/g, "")              // Alle Leerzeichen weg
+            .replace(/\s+/g, "")
             .replace(/0+(?=\d+°)/g, "")      // Entferne Nullen vor Ziffern+°: 010° → 1°, 008° → 8°, 80° bleibt 80°
             .toUpperCase();
     }
@@ -1242,12 +1242,10 @@
             ? extractCoordsFromCCLine(lines[0])
             : null;
 
-        // Bei "FALSCH": alte CC-Zeile am Anfang entfernen
         if (snippet.includes("GEOCHECKER FALSCH") && isCCLine(lines[0])) lines.shift();
 
         lines = beautifyLines(lines);
 
-        // Stelle sicher dass eine CC-Zeile am Anfang ist (bei GEOCHECKER OK mit neuen Koords)
         if (snippet.includes("GEOCHECKER OK") && cachedCoords && !isCCLine(lines[0])) {
             lines.unshift(`📌 ${cachedCoords}`);
         }
@@ -1368,12 +1366,11 @@
         const viewBtn = DOM.viewBtn;
         if (!viewBtn) return;
 
-        // Beim Klick: resize nach 300ms und 600ms
         viewBtn.addEventListener("click", () => {
             setTimeout(() => resizeNoteTextarea(), 300);
             setTimeout(() => {
                 resizeNoteTextarea();
-                focusAndPositionCursor();  // Cursor ans Ende beim Öffnen
+                focusAndPositionCursor();
             }, 600);
         });
 
