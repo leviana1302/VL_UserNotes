@@ -466,18 +466,8 @@
     function isCCLine(line) {
         if (!line) return false;
         const t = line.trim();
-
-        // Neues Format: 📌 Koords
-        if (t.startsWith("📌") && CC_COORD_REGEX_N.test(t) && CC_COORD_REGEX_E.test(t)) {
-            return true;
-        }
-
-        // Altes Format: ~* CC: Koords *~
-        if (t.startsWith("~* CC:") && t.endsWith("*~") && (CC_COORD_REGEX_N.test(t) || CC_COORD_REGEX_E.test(t))) {
-            return true;
-        }
-
-        return false;
+        return (t.startsWith("📌") && CC_COORD_REGEX_N.test(t) && CC_COORD_REGEX_E.test(t)) ||
+               (t.startsWith("~* CC:") && t.endsWith("*~") && (CC_COORD_REGEX_N.test(t) || CC_COORD_REGEX_E.test(t)));
     }
 
     /** Formatiert "~* CC:"-Zeilen in das neue 📌-Format. */
@@ -871,13 +861,7 @@
         const url = FB_SEARCH_URL.replace("__GCCODE__", gcCode);
         copyToClipboard(gcCode);
         log(`Facebook-Suche: ${url}`);
-        const a = document.createElement("a");
-        a.href = url;
-        a.target = "_blank";
-        a.rel = "noopener noreferrer";
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        window.open(url, "_blank", "noopener,noreferrer");
     }
 
     /** Löst __COORDS__-Platzhalter auf. */
@@ -1436,11 +1420,8 @@
     /** Prüft, ob das Fehler-Element im DOM sichtbar ist und den Fehlertext enthält. */
     function isSaveErrorVisible() {
         const el = document.querySelector(SAVE_ERROR_SELECTOR);
-        if (!el) return false;
-        if (!el.textContent.includes(SAVE_ERROR_TEXT)) return false;
         // offsetParent === null bedeutet "nicht sichtbar" (display:none oder detached)
-        if (el.offsetParent === null) return false;
-        return true;
+        return !!el && el.textContent.includes(SAVE_ERROR_TEXT) && el.offsetParent !== null;
     }
 
     /** Löst den Reload-Flow aus: Text in Zwischenablage, Notification, dann Seite neu laden. */
