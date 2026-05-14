@@ -38,7 +38,6 @@
     const TIMINGS = {
         writeLockRelease:      300,   // Dauer bis noteWriteLocked wieder frei
         saveSettleDelay:       400,   // Wartezeit nach writeLines vor Folgeaktion
-        resizeAfterOpen:       150,   // Wartezeit nach activateNote für resize
         waitForElementShort:  1000,   // Default-Timeout waitFor
         waitForElementMed:    1500,   // Medium Timeout
         waitForElementLong:   5000,   // Langer Timeout (z.B. Koord-Dialog)
@@ -538,31 +537,15 @@
         return lines;
     }
 
-    /** CC-Aktion: entfernt alle 📌-Zeilen, schreibt eine neue an den Anfang. */
-    function applyCC(coords) {
-        debug("applyCC", coords);
-        let lines = getSavedNote().split("\n").filter(l => !l.startsWith("📌"));
-
-        // Alte "~* CC:"-Zeilen: erste wird zur neuen CC-Zeile, weitere werden formatiert
-        let firstRemoved = false;
-        lines = lines.map(l => {
-            if (!l.startsWith("~* CC:")) return l;
-            if (!firstRemoved) { firstRemoved = true; return null; }
-            return formatOldCC(l);
-        }).filter(Boolean);
-
-        lines.unshift(`📌 ${coords}`);
-        setWorkingNote(beautifyLines(lines).join("\n"));
-    }
 
     /** Formatiert alte "~* CC:"-Notizen beim Laden der Seite in das neue Format. */
     function autoBeautifyOldNote() {
         const saved = getWorkingNote();
-        log("Ursprüngliche Note:\n" + saved);
+        debug("Ursprüngliche Note:\n" + saved);
 
         let lines = saved.split("\n");
         const coords = getCorrectedCoords();
-        log("Korrigierte Koordinaten:", coords ?? "(keine)");
+        debug("Korrigierte Koordinaten:", coords ?? "(keine)");
         if (!coords) return;
 
         // Pfad A: Alte "~* CC:"-Zeilen vorhanden → komplett konvertieren
@@ -1204,7 +1187,7 @@
     })();
 
     function scanCheckers() {
-        log("scanCheckers");
+        debug("scanCheckers");
         const saved = getWorkingNote().toUpperCase();
 
         let foundAnyChecker = false;
@@ -1441,8 +1424,8 @@
 
             if (shouldShowWarning) {
                 log("SolutionChecker OK: zeige Warnung für neue Koordinaten");
-                log("  Alt:", oldCoords);
-                log("  Neu:", cachedCoords);
+                debug("  Alt:", oldCoords);
+                debug("  Neu:", cachedCoords);
                 showCoordsChangedWarning(oldCoords, cachedCoords);
             }
         }
@@ -2513,7 +2496,7 @@
 
         // 1. Aktuelle korrigierte Koords aus DOM
         const currentCoords = getCorrectedCoords();
-        log("checkAndShowCoordsChanged: currentCoords =", currentCoords);
+        debug("checkAndShowCoordsChanged: currentCoords =", currentCoords);
 
         // Spezialfall: Keine aktuellen Koords, aber alte in der Note vorhanden
         if (!currentCoords) {
@@ -2523,7 +2506,7 @@
 
             // Nur Stale-Coords-Warnung zeigen wenn NICHT bereits eine Reset-Warnung angezeigt wurde
             if (firstLineCoords && !resetWarningWasShown) {
-                log("  ⚠️ SPEZIALFALL: Keine aktuellen Koords, aber alte Koords in der Note!");
+                debug("  ⚠️ SPEZIALFALL: Keine aktuellen Koords, aber alte Koords in der Note!");
                 showStaleCoordsBanner(firstLineCoords);
             }
             return;
@@ -2532,20 +2515,20 @@
         // 2. Erste Zeile der gespeicherten Note
         const saved = getSavedNote();
         const firstLine = saved.split("\n")[0];
-        log("  erste Note-Zeile:", JSON.stringify(firstLine));
+        debug("  erste Note-Zeile:", JSON.stringify(firstLine));
 
         // 3. Koords aus erster Zeile extrahieren (beide Formate unterstützen!)
         let firstLineCoords = null;
         if (isCCLine(firstLine)) {
             firstLineCoords = extractCoordsFromCCLine(firstLine);
-            log("  Koords aus erster Zeile:", firstLineCoords);
+            debug("  Koords aus erster Zeile:", firstLineCoords);
         } else {
-            log("  erste Zeile ist keine CC-Zeile");
+            debug("  erste Zeile ist keine CC-Zeile");
         }
 
         // 4. Vergleich mit Normalisierung: Wenn erste Zeile passt → alles OK
         if (firstLineCoords && normalizeCoordsForComparison(firstLineCoords) === normalizeCoordsForComparison(currentCoords)) {
-            log("  ✅ Koords passen zur ersten Zeile → keine Warnung");
+            debug("  ✅ Koords passen zur ersten Zeile → keine Warnung");
             return;
         }
 
@@ -2559,19 +2542,19 @@
         } catch (e) {
             warn("  localStorage Lesen fehlgeschlagen:", e);
         }
-        log("  lastSeenCoords (aus localStorage):", lastSeenCoords);
+        debug("  lastSeenCoords (aus localStorage):", lastSeenCoords);
 
         // Wenn User diese Koords schon gesehen hat (normalisiert) → keine Warnung
         if (lastSeenCoords && normalizeCoordsForComparison(lastSeenCoords) === normalizeCoordsForComparison(currentCoords)) {
-            log("  ℹ️ Koords bereits vom User gesehen (X-Button geklickt) → keine Warnung");
+            debug("  ℹ️ Koords bereits vom User gesehen (X-Button geklickt) → keine Warnung");
             return;
         }
 
         // 6. Warnung zeigen
         const oldCoords = expectedOldCoords ?? firstLineCoords ?? lastSeenCoords ?? "(keine)";
-        log("  🚨 KOORDINATEN-ÄNDERUNG ERKANNT");
-        log("    Alt:", oldCoords);
-        log("    Neu:", currentCoords);
+        debug("  🚨 KOORDINATEN-ÄNDERUNG ERKANNT");
+        debug("    Alt:", oldCoords);
+        debug("    Neu:", currentCoords);
         showCoordsChangedWarning(oldCoords, currentCoords);
     }
 
@@ -2593,7 +2576,7 @@
 
         // Original-Text für Undo sichern
         originalNoteText = getSavedNote();
-        log("originalNoteText gesichert, Länge:", originalNoteText.length);
+        debug("originalNoteText gesichert, Länge:", originalNoteText.length);
 
         // 2. Note aufräumen
         autoBeautifyOldNote();
