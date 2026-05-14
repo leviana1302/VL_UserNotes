@@ -675,14 +675,14 @@
         {
             label: '🔍 PUZZLE-COORDS (Desktop)',
             emoji: '🔍',
-            value: ``,  // Link wird in applySnippet verarbeitet
+            value: ``,
             isLink: true,
             linkUrl: 'https://puzzle-coords.info/__GCCODE__'
         },
         {
             label: '📱 PUZZLE-COORDS (Mobile)',
             emoji: '📱',
-            value: ``,  // Link wird in applySnippet verarbeitet
+            value: ``,
             isLink: true,
             linkUrl: 'https://puzzle-coords.info/mobile/mobile_search.php?gc_code=__GCCODE__'
         }
@@ -1065,7 +1065,6 @@
 
         let foundAnyChecker = false;
 
-        // Integrierter Solution-Checker
         if (DOM.solutionCheckerLabel) {
             foundAnyChecker = true;
             if (!saved.includes("GEOCHECKER") && !notified.has("INTERNAL")) {
@@ -1895,7 +1894,6 @@
                 e.stopPropagation();
                 menu.classList.toggle("open");
             });
-            // Klick außerhalb schließt Menü
             document.addEventListener("click", () => menu.classList.remove("open"));
 
             wrap.appendChild(overflowBtn);
@@ -2260,9 +2258,7 @@
         let lastSeenCoords = null;
         try {
             const stored = localStorage.getItem(`vl-corrected-coords-${gcCode}`);
-            if (stored) {
-                lastSeenCoords = JSON.parse(stored).coords;
-            }
+            if (stored) lastSeenCoords = JSON.parse(stored).coords;
         } catch (e) {
             warn("  localStorage Lesen fehlgeschlagen:", e);
         }
