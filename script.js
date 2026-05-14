@@ -253,17 +253,8 @@
     function resizeNoteTextarea() {
         const ta = DOM.note;
         if (!ta) return;
-
-        // Aktuelle scrollHeight + 50px Zugabe
-        ta.style.height = "auto";  // Reset auf auto um scrollHeight zu berechnen
-        const scrollHeight = ta.scrollHeight;
-        const newHeight = scrollHeight + 50;
-
-        debug("resizeNoteTextarea:");
-        debug("  scrollHeight:", scrollHeight, "px");
-        debug("  newHeight (+ 50px):", newHeight, "px");
-
-        ta.style.height = newHeight + "px";
+        ta.style.height = "auto";
+        ta.style.height = (ta.scrollHeight + 50) + "px";
     }
 
     /** Scrollt sanft zur Textarea. */
@@ -337,11 +328,8 @@
         if (!ta)              return warn("writeLines: Textarea nicht gefunden");
         if (noteWriteLocked)  return warn("writeLines: noteWriteLocked=true");
 
-        // Einheitliche Bereinigung in einem Durchgang
         const cleaned = cleanLines(lines);
         const cleanedText = cleaned.join("\n");
-
-        // Puffer synchronisieren
         setWorkingNote(cleanedText);
 
         noteWriteLocked = true;
@@ -1947,8 +1935,6 @@
         container.id = "cc-ui-container";
         container.appendChild(buildUndoButton());
 
-        // Snippet-Buttons direkt in den Container (eine Zeile mit Undo-Button)
-        // Normale Buttons (emoji, kein Link, kein FB, kein Overflow)
         const normalSnippets = SNIPPETS.filter(sn => (sn.emoji || sn.image) && !sn.isLink && !sn.isFbSearch && !sn.inOverflow);
         normalSnippets.forEach(sn => container.appendChild(buildSnippetButton(sn)));
 
