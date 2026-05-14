@@ -1421,7 +1421,7 @@
             #cc-btn {
                 position: relative;
                 box-sizing: border-box;
-                flex: 0 0 calc((100% - 60px) / 11);
+                flex: 0 1 calc((100% - 60px) / 11);
                 min-height: 36px;
                 display: flex;
                 align-items: center;
@@ -1456,7 +1456,7 @@
             #cc-ui-container button:not(#cc-overflow-btn):not(#cc-btn) {
                 position: relative;
                 box-sizing: border-box;
-                flex: 0 0 calc((100% - 60px) / 11);
+                flex: 0 1 calc((100% - 60px) / 11);
                 padding: 8px 12px;
                 border: 1px solid #ccc;
                 border-radius: 4px;
@@ -1474,7 +1474,7 @@
             #cc-ui-container button:not(#cc-btn):hover { background: #e0e0e0; }
             #cc-ui-container a {
                 box-sizing: border-box;
-                flex: 0 0 calc((100% - 60px) / 11);
+                flex: 0 1 calc((100% - 60px) / 11);
                 min-height: 36px;
                 padding: 8px 12px;
             }
@@ -1483,7 +1483,7 @@
             #cc-overflow-wrap {
                 position: relative;
                 box-sizing: border-box;
-                flex: 0 0 calc((100% - 60px) / 11);
+                flex: 0 1 calc((100% - 60px) / 11);
                 display: inline-flex;
             }
             #cc-overflow-btn {
