@@ -830,8 +830,7 @@
         // Fall C: Default → am Ende anhängen
         debug("insertSnippet → am Ende");
         const lines = ta.value.split("\n");
-        const lastLine = lines.length > 0 ? lines[lines.length - 1] : "";
-        if (lastLine.trim() !== "") {
+        if (lines[lines.length - 1].trim() !== "") {
             lines.push("");
         }
         lines.push(text);
@@ -1747,11 +1746,7 @@
         }, TIMINGS.viewportZoomDelay);
     }
 
-    /**
-     * Aktualisiert den CC/Undo-Button je nach Noten-Zustand.
-     * - Grün "📝"  → Note entspricht dem ursprünglichen Ladestand
-     * - Blau "↩"   → Note wurde seither verändert
-     */
+    /** Aktiviert den Undo-Button wenn die Note gegenüber dem Ladestand verändert wurde. */
     function updateUndoBtn() {
         const undoBtn = document.getElementById("cc-btn");
         if (!undoBtn || originalNoteText === null) return;
@@ -1832,8 +1827,8 @@
         return b;
     }
 
-    /** Baut den CC/Undo-Button mit Toggle-Logik. */
-    function buildCCButton() {
+    /** Baut den Undo-Button (↩ + Versionsnummer). */
+    function buildUndoButton() {
         const btn = document.createElement("button");
         btn.id             = "cc-btn";
         btn.type           = "button";
@@ -1969,7 +1964,7 @@
 
         const container = document.createElement("div");
         container.id = "cc-ui-container";
-        container.appendChild(buildCCButton());
+        container.appendChild(buildUndoButton());
 
         // Snippet-Buttons direkt in den Container (eine Zeile mit Undo-Button)
         // Normale Buttons (emoji, kein Link, kein FB, kein Overflow)
