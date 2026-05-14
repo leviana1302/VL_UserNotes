@@ -743,7 +743,6 @@
             return;
         }
 
-        // Sicherstellen dass Textarea fokussiert ist
         if (ta !== document.activeElement) ta.focus();
 
         const cursorActive = ta === document.activeElement && typeof ta.selectionStart === "number";
@@ -1685,7 +1684,6 @@
             img.alt = sn.label;
             a.appendChild(img);
 
-            // Klick: GC-Code in Zwischenablage kopieren
             a.addEventListener("click", () => {
                 if (gcCode) copyToClipboard(gcCode);
             });
@@ -1999,7 +1997,6 @@
 
     /** Tastatur-Event-Handler für alle Shortcuts. */
     async function handleKeydown(e) {
-        // ESC → Note schließen (kein Modifier)
         if (e.key === "Escape" && !e.ctrlKey && !e.shiftKey && !e.altKey) {
             if (isNoteOpen()) {
                 e.preventDefault();
@@ -2008,7 +2005,6 @@
             return;
         }
 
-        // Alt+Zahl / Alt+Buchstabe → Snippet per Tastenkürzel
         if (e.altKey && !e.ctrlKey && !e.shiftKey) {
             const digitMatch  = e.code?.match(/^(?:Digit|Numpad)(\d)$/);
             const letterMatch = e.code?.match(/^Key([A-Z])$/);
@@ -2028,7 +2024,6 @@
         if (!e.ctrlKey || e.shiftKey || e.altKey) return;
         const key = e.key.toLowerCase();
 
-        // Ctrl+S → speichern
         if (key === "s") {
             e.preventDefault();
             if (!isNoteOpen()) return warn("Ctrl+S ignoriert: Note nicht offen");
@@ -2038,7 +2033,6 @@
             return;
         }
 
-        // Ctrl+O → Note öffnen
         if (key === "o") {
             e.preventDefault();
             log("Shortcut Ctrl+O → Note öffnen");
@@ -2319,8 +2313,6 @@
         initSaveButtonInterceptor();
         initRestoreButtonObserver();
 
-        // Reset-Coords-Prompt anzeigen, wenn Koordinaten korrigiert sind
-        // UND die Note bereits "GEOCHECKER FALSCH" enthält
         if (cachedCoords && originalNoteText?.toUpperCase().includes("GEOCHECKER FALSCH")) {
             log("Startup: Reset-Coords-Prompt anzeigen");
             showResetCoordsPrompt();
