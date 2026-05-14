@@ -442,7 +442,7 @@
         const match = t.match(/(N\s*\d+°\s*\d+\.\d+)\s+(E)\s*(\d+)°\s*(\d+\.\d+)/i);
         if (!match) return `📌 (alt) ${t}`;
         const [, north, eastPrefix, eastDegRaw, eastRest] = match;
-        return `📌 ${north} ${eastPrefix} ${eastDegRaw.padStart(3, "0")}° ${eastRest}`;
+        return `📌 ${north} ${eastPrefix} ${pad(eastDegRaw, 3)}° ${eastRest}`;
     }
 
     /**
