@@ -301,9 +301,7 @@
                 continue;
             }
 
-            if (result.length > 0 && (isEmojiLine || blankCount > 0)) {
-                result.push("");
-            }
+            if (result.length > 0 && (isEmojiLine || blankCount > 0)) result.push("");
 
             result.push(line);
             blankCount = 0;
@@ -675,14 +673,14 @@
         {
             label: '🔍 PUZZLE-COORDS (Desktop)',
             emoji: '🔍',
-            value: ``,
+            value: "",
             isLink: true,
             linkUrl: 'https://puzzle-coords.info/__GCCODE__'
         },
         {
             label: '📱 PUZZLE-COORDS (Mobile)',
             emoji: '📱',
-            value: ``,
+            value: "",
             isLink: true,
             linkUrl: 'https://puzzle-coords.info/mobile/mobile_search.php?gc_code=__GCCODE__'
         }
@@ -1371,7 +1369,6 @@
                 focusAndPositionCursor();
             }, 600);
         });
-
     }
 
     // ════════════════════════════════════════════════════════════════════════════
