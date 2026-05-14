@@ -1420,7 +1420,8 @@
             }
             #cc-btn {
                 position: relative;
-                flex: 0 1 calc(100% / 11 - 6px);
+                box-sizing: border-box;
+                flex: 0 0 calc((100% - 60px) / 11);
                 min-height: 36px;
                 display: flex;
                 align-items: center;
@@ -1454,7 +1455,8 @@
             }
             #cc-ui-container button:not(#cc-overflow-btn):not(#cc-btn) {
                 position: relative;
-                flex: 0 1 calc(100% / 11 - 6px);
+                box-sizing: border-box;
+                flex: 0 0 calc((100% - 60px) / 11);
                 padding: 8px 12px;
                 border: 1px solid #ccc;
                 border-radius: 4px;
@@ -1471,7 +1473,8 @@
             }
             #cc-ui-container button:not(#cc-btn):hover { background: #e0e0e0; }
             #cc-ui-container a {
-                flex: 0 1 calc(100% / 11 - 6px);
+                box-sizing: border-box;
+                flex: 0 0 calc((100% - 60px) / 11);
                 min-height: 36px;
                 padding: 8px 12px;
             }
@@ -1479,11 +1482,13 @@
             /* Overflow-Dropdown ("➕"-Button) */
             #cc-overflow-wrap {
                 position: relative;
-                flex: 0 1 calc(100% / 11 - 6px);
+                box-sizing: border-box;
+                flex: 0 0 calc((100% - 60px) / 11);
                 display: inline-flex;
             }
             #cc-overflow-btn {
                 width: 100%;
+                box-sizing: border-box;
                 position: relative;
                 padding: 8px 12px;
                 border: 1px solid #ccc;
@@ -1500,7 +1505,6 @@
             }
             #cc-overflow-btn:hover { background: #e0e0e0; }
             @media (max-width: 768px) {
-                #cc-overflow-wrap { flex: 0 1 calc(100% / 11 - 5px); }
                 #cc-overflow-btn { padding: 14px 16px; font-size: 22px; }
             }
             #cc-overflow-menu {
@@ -1534,7 +1538,6 @@
                 #cc-ui-container button:not(#cc-overflow-btn):not(#cc-btn) {
                     padding: 14px 16px;
                     font-size: 19px;
-                    flex: 0 1 calc(100% / 11 - 5px);
                 }
             }
             .vl-shortcut-badge {
