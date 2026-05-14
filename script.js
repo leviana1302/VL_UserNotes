@@ -415,11 +415,9 @@
                 continue;
             }
 
-            // Prüfe BEAUTIFY_EXACT auf getrimmtem String
             const exact = BEAUTIFY_EXACT[trimmed];
             if (exact) t = exact;
 
-            // Danach immer BEAUTIFY_PREFIX prüfen
             for (const [prefix, emoji] of BEAUTIFY_PREFIX) {
                 if (t.startsWith(prefix)) {
                     if (!t.startsWith(emoji)) t = emoji + t;
@@ -462,12 +460,10 @@
         if (!line) return null;
         const t = line.trim();
 
-        // Neues Format: "📌 N 50° 42.968 E 010° 47.456"
         if (t.startsWith("📌")) {
             return t.substring(2).trim();
         }
 
-        // Altes Format: "~* CC: N 50° 42.968 E 10° 47.456 *~"
         if (t.startsWith("~* CC:") && t.endsWith("*~")) {
             return t.replace(/^~\*\s*CC:\s*/, "").replace(/\s*\*~$/, "").trim();
         }
@@ -723,17 +719,8 @@
             activateNote();
             const pos = ta.selectionEnd || ta.value.length;
 
-            // Leerzeichen davor einfügen, wenn keins da ist
-            let prefix = '';
-            if (pos > 0 && ta.value[pos - 1] !== ' ') {
-                prefix = ' ';
-            }
-
-            // Leerzeichen danach einfügen, wenn keins da ist
-            let suffix = '';
-            if (pos < ta.value.length && ta.value[pos] !== ' ') {
-                suffix = ' ';
-            }
+            const prefix = pos > 0 && ta.value[pos - 1] !== ' ' ? ' ' : '';
+            const suffix = pos < ta.value.length && ta.value[pos] !== ' ' ? ' ' : '';
 
             const fullText = prefix + text + suffix;
             ta.setRangeText(fullText, pos, pos, 'end');
@@ -767,7 +754,6 @@
 
         // Fall B: Note war offen + Cursor aktiv → an Cursor-Position
         if (cursorActive && !wasNoteClosed) {
-            debug("insertSnippet → an Cursor-Position");
             const start  = ta.selectionStart;
             const before = ta.value.slice(0, start);
             const after  = ta.value.slice(start);
@@ -785,7 +771,6 @@
         }
 
         // Fall C: Default → am Ende anhängen
-        debug("insertSnippet → am Ende");
         const lines = ta.value.split("\n");
         if (lines[lines.length - 1].trim() !== "") {
             lines.push("");
@@ -2313,38 +2298,21 @@
             return;
         }
 
-        // 1. Aktuelle korrigierte Koords + erste Note-Zeile einmalig lesen
         const currentCoords = getCorrectedCoords();
-        debug("checkAndShowCoordsChanged: currentCoords =", currentCoords);
-
         const saved          = getSavedNote();
         const firstLine      = saved.split("\n")[0];
         const firstLineCoords = isCCLine(firstLine) ? extractCoordsFromCCLine(firstLine) : null;
 
         // Spezialfall: Keine aktuellen Koords, aber alte in der Note vorhanden
         if (!currentCoords) {
-            if (firstLineCoords && !resetWarningWasShown) {
-                debug("  ⚠️ SPEZIALFALL: Keine aktuellen Koords, aber alte Koords in der Note!");
-                showStaleCoordsBanner(firstLineCoords);
-            }
+            if (firstLineCoords && !resetWarningWasShown) showStaleCoordsBanner(firstLineCoords);
             return;
         }
 
-        // 2. Erste Zeile loggen
-        debug("  erste Note-Zeile:", JSON.stringify(firstLine));
-        if (isCCLine(firstLine)) {
-            debug("  Koords aus erster Zeile:", firstLineCoords);
-        } else {
-            debug("  erste Zeile ist keine CC-Zeile");
-        }
-
-        // 4. Vergleich mit Normalisierung: Wenn erste Zeile passt → alles OK
         if (firstLineCoords && normalizeCoordsForComparison(firstLineCoords) === normalizeCoordsForComparison(currentCoords)) {
-            debug("  ✅ Koords passen zur ersten Zeile → keine Warnung");
             return;
         }
 
-        // 5. Mismatch: prüfe localStorage ("schon gesehen?")
         let lastSeenCoords = null;
         try {
             const stored = localStorage.getItem(`vl-corrected-coords-${gcCode}`);
@@ -2354,19 +2322,12 @@
         } catch (e) {
             warn("  localStorage Lesen fehlgeschlagen:", e);
         }
-        debug("  lastSeenCoords (aus localStorage):", lastSeenCoords);
-
         // Wenn User diese Koords schon gesehen hat (normalisiert) → keine Warnung
         if (lastSeenCoords && normalizeCoordsForComparison(lastSeenCoords) === normalizeCoordsForComparison(currentCoords)) {
-            debug("  ℹ️ Koords bereits vom User gesehen (X-Button geklickt) → keine Warnung");
             return;
         }
 
-        // 6. Warnung zeigen
         const oldCoords = expectedOldCoords ?? firstLineCoords ?? lastSeenCoords ?? "(keine)";
-        debug("  🚨 KOORDINATEN-ÄNDERUNG ERKANNT");
-        debug("    Alt:", oldCoords);
-        debug("    Neu:", currentCoords);
         showCoordsChangedWarning(oldCoords, currentCoords);
     }
 
