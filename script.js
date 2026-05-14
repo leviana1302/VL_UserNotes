@@ -303,9 +303,8 @@
                 continue;
             }
 
-            // Nicht-leere Zeile: entscheiden, ob eine Leerzeile davor kommen muss
             if (result.length > 0 && (isEmojiLine || blankCount > 0)) {
-                result.push("");  // genau EINE Leerzeile
+                result.push("");
             }
 
             result.push(line);
@@ -338,22 +337,15 @@
         setTextareaValue(ta, cleanedText);
 
         if (save) {
-            setTimeout(() => {
-                debug("writeLines → speichern");
-                DOM.saveBtn?.click();
-            }, 200);
+            setTimeout(() => DOM.saveBtn?.click(), 200);
         }
 
-        setTimeout(() => {
-            noteWriteLocked = false;
-            debug("Write-Lock aufgehoben");
-        }, TIMINGS.writeLockRelease);
+        setTimeout(() => { noteWriteLocked = false; }, TIMINGS.writeLockRelease);
     }
 
     /** Schreibt den Puffer `pendingNoteText` in die Textarea und speichert. */
     function flushNoteChanges() {
         if (!noteDirty || pendingNoteText === null) return;
-        debug("Flush: Puffer wird gespeichert");
         activateNote();
         writeLines(pendingNoteText.split("\n"), true);
         noteDirty = false;
@@ -1302,9 +1294,8 @@
         let lines = ta.value.split("\n");
 
         // ALTE erste CC-Zeile MERKEN (für Koords-Change-Warnung)
-        const oldFirstLine = lines[0];
-        const oldCoordsFromFirstLine = isCCLine(oldFirstLine)
-            ? extractCoordsFromCCLine(oldFirstLine)
+        const oldCoordsFromFirstLine = isCCLine(lines[0])
+            ? extractCoordsFromCCLine(lines[0])
             : null;
 
         // Bei "FALSCH": alte CC-Zeile am Anfang entfernen
